@@ -5,7 +5,7 @@
  */
 package org.geoserver.data.util;
 
-import java.awt.Color;
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -192,11 +192,7 @@ public class CoverageUtils {
         }
     }
 
-    /**
-     * @param paramValues
-     * @param key
-     * @param param
-     */
+    /** */
     public static Object getCvParamValue(
             final String key, ParameterValue param, final List paramValues, final int index) {
         Object value = null;
@@ -264,11 +260,7 @@ public class CoverageUtils {
         return (String) paramValues.get(index);
     }
 
-    /**
-     * @param params
-     * @param key
-     * @param param
-     */
+    /** */
     public static Object getCvParamValue(final String key, ParameterValue param, final Map params) {
         Object value = null;
 
@@ -400,8 +392,6 @@ public class CoverageUtils {
      *
      * @param parameterDescriptors The parameter descriptors of the reader
      * @param readParameters The current set of reader parameters
-     * @param value
-     * @param parameterAliases
      */
     public static GeneralParameterValue[] mergeParameter(
             List<GeneralParameterDescriptor> parameterDescriptors,
@@ -418,12 +408,30 @@ public class CoverageUtils {
                 final ParameterValue pv = (ParameterValue) pd.createValue();
                 pv.setValue(value);
 
-                // add to the list
-                GeneralParameterValue[] readParametersClone =
-                        new GeneralParameterValue[readParameters.length + 1];
-                System.arraycopy(readParameters, 0, readParametersClone, 0, readParameters.length);
-                readParametersClone[readParameters.length] = pv;
-                readParameters = readParametersClone;
+                // if it's in the list already, override
+                int existingPvIndex = -1;
+                for (int i = 0; i < readParameters.length && existingPvIndex < 0; i++) {
+                    GeneralParameterValue oldPv = readParameters[i];
+                    if (aliases.contains(oldPv.getDescriptor().getName().getCode())) {
+                        existingPvIndex = i;
+                    }
+                }
+
+                if (existingPvIndex >= 0) {
+                    GeneralParameterValue[] clone =
+                            new GeneralParameterValue[readParameters.length];
+                    System.arraycopy(readParameters, 0, clone, 0, readParameters.length);
+                    clone[existingPvIndex] = pv;
+                    readParameters = clone;
+
+                } else {
+                    // add to the list
+                    GeneralParameterValue[] clone =
+                            new GeneralParameterValue[readParameters.length + 1];
+                    System.arraycopy(readParameters, 0, clone, 0, readParameters.length);
+                    clone[readParameters.length] = pv;
+                    readParameters = clone;
+                }
 
                 // leave
                 break;

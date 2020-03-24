@@ -14,15 +14,14 @@ import java.util.List;
  */
 public interface PublishedInfo extends CatalogInfo {
 
+    /** Use the entity as capabilities root element if it's the only top level element */
+    public static final String ROOT_IN_CAPABILITIES = "rootInCapabilities";
+
     /** Returns the name. */
     String getName();
 
     /** Sets the name. */
     void setName(String name);
-
-    /** @see prefixedName */
-    @Deprecated
-    public String getPrefixedName();
 
     /**
      * The derived prefixed name.
@@ -78,4 +77,27 @@ public interface PublishedInfo extends CatalogInfo {
      * @see AttributionInfo
      */
     void setAttribution(AttributionInfo attribution);
+
+    /**
+     * Flag indicating wether the layer is enabled or not.
+     *
+     * @uml.property name="enabled"
+     */
+    boolean isEnabled();
+
+    /**
+     * Sets the flag indicating wether the layer is enabled or not.
+     *
+     * @uml.property name="enabled"
+     */
+    void setEnabled(boolean enabled);
+
+    /**
+     * Returns true if the layer existence should be advertised (true by default, unless otherwise
+     * set)
+     */
+    boolean isAdvertised();
+
+    /** Set to true if the layer should be advertised, false otherwise */
+    void setAdvertised(boolean advertised);
 }

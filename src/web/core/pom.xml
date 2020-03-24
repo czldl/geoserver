@@ -12,13 +12,12 @@
   <parent>
     <groupId>org.geoserver</groupId>    
     <artifactId>web</artifactId>
-    <version>2.16-SNAPSHOT</version>
+    <version>2.18-SNAPSHOT</version>
   </parent>
 
   <groupId>org.geoserver.web</groupId>
   <artifactId>gs-web-core</artifactId>
   <packaging>jar</packaging>
-  <version>2.16-SNAPSHOT</version>
   <name>Core UI Module</name>
   
   <dependencies>
@@ -138,6 +137,15 @@
     <groupId>org.geotools</groupId>
     <artifactId>gt-geopkg</artifactId>
    </dependency>
+	<dependency>
+		<groupId>org.apache.wicket</groupId>
+		<artifactId>wicket-datetime</artifactId>
+		<version>${wicket.version}</version>
+	</dependency>
+	<dependency>
+		<groupId>joda-time</groupId>
+		<artifactId>joda-time</artifactId>
+	</dependency>
    <dependency>
     <groupId>org.geotools.jdbc</groupId>
     <artifactId>gt-jdbc-h2</artifactId>

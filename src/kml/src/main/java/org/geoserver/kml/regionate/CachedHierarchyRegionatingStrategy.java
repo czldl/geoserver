@@ -35,6 +35,7 @@ import org.geotools.map.Layer;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.operation.projection.ProjectionException;
 import org.geotools.util.CanonicalSet;
+import org.geotools.util.SuppressFBWarnings;
 import org.geotools.util.logging.Logging;
 import org.h2.tools.DeleteDbFiles;
 import org.locationtech.jts.geom.Envelope;
@@ -190,9 +191,6 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
      * about the same location. The max difference allowed is {@link #MAX_ERROR}, evaluated as a
      * percentage of the width and height of the envelope. The method assumes both envelopes are in
      * the same CRS
-     *
-     * @param tileEnvelope
-     * @param expectedEnvelope
      */
     private boolean envelopeMatch(
             ReferencedEnvelope tileEnvelope, ReferencedEnvelope expectedEnvelope) {
@@ -213,12 +211,9 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
                 && yRatio < MAX_ERROR;
     }
 
-    /**
-     * Open/creates the db and then reads/computes the tile features
-     *
-     * @param dataDir
-     * @param tile
-     */
+    /** Open/creates the db and then reads/computes the tile features */
+    @SuppressFBWarnings(
+            "DMI_CONSTANT_DB_PASSWORD") // well spotted, but the db contents are not sensitive
     private Set<String> getFeaturesForTile(String dataDir, Tile tile) throws Exception {
         Connection conn = null;
         Statement st = null;
@@ -292,14 +287,7 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
         return fids;
     }
 
-    /**
-     * Store the fids inside
-     *
-     * @param t
-     * @param fids
-     * @param conn
-     * @throws SQLException
-     */
+    /** Store the fids inside */
     private void storeFids(Tile t, Set<String> fids, Connection conn) throws SQLException {
         PreparedStatement ps = null;
         try {
@@ -328,13 +316,7 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
         }
     }
 
-    /**
-     * Computes the fids that will be stored in the specified tile
-     *
-     * @param tileCoords
-     * @param st
-     * @throws SQLException
-     */
+    /** Computes the fids that will be stored in the specified tile */
     private Set<String> computeFids(Tile tile, Connection conn) throws Exception {
         Tile parent = tile.getParent();
         Set<String> parentFids = getUpwardFids(parent, conn);
@@ -424,7 +406,6 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
      * that they have the same FID and a geometry whose centroid is the same as the original feature
      * one.
      *
-     * @param envelope
      * @param indexConnection a connection to the feature id cache db
      */
     protected abstract FeatureIterator getSortedFeatures(
@@ -437,10 +418,6 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
     /**
      * Returns a set of all the fids in the specified tile and in the parents of it, recursing up to
      * the root tile
-     *
-     * @param tile
-     * @param st
-     * @throws SQLException
      */
     private Set<String> getUpwardFids(Tile tile, Connection conn) throws Exception {
         // recursion stop condition
@@ -467,10 +444,6 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
      *   <li>the tile was already computed, and we have data, the returned sest will be non empty
      *   <li>the tile is new, the db contains nothing, in this case we return "null"
      *       <ul>
-     *
-     * @param tileCoords
-     * @param conn
-     * @throws SQLException
      */
     protected Set<String> readCachedTileFids(Tile tile, Connection conn) throws SQLException {
         Set<String> fids = null;
@@ -512,9 +485,6 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
     /**
      * Returns the name to be used for the database. Should be unique for this specific regionated
      * layer.
-     *
-     * @param con
-     * @param layer
      */
     protected String getDatabaseName(WMSMapContent con, Layer layer) throws Exception {
         return getDatabaseName(featureType);
@@ -531,13 +501,7 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
      */
     protected class CachedTile extends Tile {
 
-        /**
-         * Creates a new tile with the given coordinates
-         *
-         * @param x
-         * @param y
-         * @param z
-         */
+        /** Creates a new tile with the given coordinates */
         public CachedTile(long x, long y, long z) {
             super(x, y, z);
         }
@@ -553,9 +517,6 @@ public abstract class CachedHierarchyRegionatingStrategy implements RegionatingS
          * </ul>
          *
          * This code takes care of the first, whilst the second issue remains as a TODO
-         *
-         * @param x
-         * @param y
          */
         public boolean contains(double x, double y) {
             if (super.contains(x, y)) {

@@ -67,7 +67,6 @@ import org.geoserver.platform.resource.Files;
 import org.geoserver.platform.resource.Paths;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resource.Type;
-import org.geoserver.platform.resource.Resources;
 import org.geoserver.security.auth.AuthenticationCache;
 import org.geoserver.security.auth.GeoServerRootAuthenticationProvider;
 import org.geoserver.security.auth.GuavaAuthenticationCacheImpl;
@@ -750,54 +749,14 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         return get("security");
     }
 
-    /**
-     * Security configuration root directory.
-     *
-     * @deprecated Use {@link #get(String)}}
-     */
-    public File getSecurityRoot() throws IOException {
-        return get("security").dir();
-    }
-
     /** Role configuration root directory. */
     public Resource role() {
         return get("security/role");
     }
 
-    /**
-     * Role configuration root directory.
-     *
-     * @deprecated Use {@link #role()}
-     */
-    public File getRoleRoot() throws IOException {
-        return get("security/role").dir();
-    }
-
-    /**
-     * Role configuration root directory.
-     *
-     * @deprecated Use {@link #role()}
-     */
-    public File getRoleRoot(boolean create) throws IOException {
-        Resource directory = get("security/role");
-        if (create) {
-            return directory.dir();
-        } else {
-            return Resources.directory(directory);
-        }
-    }
-
     /** Password policy configuration root directory */
     public Resource passwordPolicy() {
         return get("security/pwpolicy");
-    }
-    /**
-     * Password policy configuration root directory
-     *
-     * @deprecated Use {@link #passwordPolicy()}
-     */
-    public File getPasswordPolicyRoot() throws IOException {
-        return get("security/pwpolicy").dir();
     }
 
     /** User/group configuration root directory. */
@@ -805,27 +764,9 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         return get("security/usergroup");
     }
 
-    /**
-     * User/group configuration root directory.
-     *
-     * @deprecated Use {@link #userGroup()}
-     */
-    public File getUserGroupRoot() throws IOException {
-        return get("security/usergroup").dir();
-    }
-
     /** Authentication configuration root directory. */
     public Resource auth() throws IOException {
         return get("security/auth");
-    }
-
-    /**
-     * Authentication configuration root directory.
-     *
-     * @deprecated use {@link #auth()}
-     */
-    public File getAuthRoot() throws IOException {
-        return get("security/auth").dir();
     }
 
     /** Authentication filter root directory. */
@@ -833,26 +774,9 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         return get("security/filter");
     }
 
-    /**
-     * Authentication filter root directory.
-     *
-     * @deprecated Use {@link #auth()}
-     */
-    public File getFilterRoot() throws IOException {
-        return get("security/filter").dir();
-    }
-
     /** Master password provider root */
     public Resource masterPasswordProvider() throws IOException {
         return get("security/masterpw");
-    }
-    /**
-     * Master password provider root
-     *
-     * @deprecated Use {@link #masterPasswordProvider()}
-     */
-    public File getMasterPasswordProviderRoot() throws IOException {
-        return get("security/masterpw").dir();
     }
 
     /** Lists all available role service configurations. */
@@ -873,7 +797,10 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
                 if (roleService == null) {
                     roleService = roleServiceHelper.load(name);
                     if (roleService != null) {
-                        roleServices.put(name, roleService);
+                        GeoServerRoleService previous = roleServices.putIfAbsent(name, roleService);
+                        if (previous != null) {
+                            roleService = previous;
+                        }
                     }
                 }
             }
@@ -948,7 +875,11 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
                 if (validator == null) {
                     validator = passwordValidatorHelper.load(name);
                     if (validator != null) {
-                        passwordValidators.put(name, validator);
+                        PasswordValidator previous =
+                                passwordValidators.putIfAbsent(name, validator);
+                        if (previous != null) {
+                            validator = previous;
+                        }
                     }
                 }
             }
@@ -1231,7 +1162,11 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
                 if (ugService == null) {
                     ugService = userGroupServiceHelper.load(name);
                     if (ugService != null) {
-                        userGroupServices.put(name, ugService);
+                        GeoServerUserGroupService previous =
+                                userGroupServices.putIfAbsent(name, ugService);
+                        if (previous != null) {
+                            ugService = previous;
+                        }
                     }
                 }
             }
@@ -1762,7 +1697,7 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         if (pwDigestFile.getType() == Type.RESOURCE) {
             InputStream fin = pwDigestFile.in();
             try {
-                return IOUtils.toString(fin);
+                return IOUtils.toString(fin, "UTF-8");
             } finally {
                 fin.close();
             }
@@ -1780,7 +1715,7 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
     void saveMasterPasswordDigest(String masterPasswdDigest) throws IOException {
         OutputStream fout = security().get(MASTER_PASSWD_DIGEST_FILENAME).out();
         try {
-            IOUtils.write(masterPasswdDigest, fout);
+            IOUtils.write(masterPasswdDigest, fout, "UTF-8");
         } finally {
             fout.close();
         }
@@ -1920,10 +1855,7 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         }
     }
 
-    /**
-     * @return the master password used for the migration
-     * @throws Exception
-     */
+    /** @return the master password used for the migration */
     char[] extractMasterPasswordForMigration(Properties props) throws Exception {
 
         Map<String, String> candidates = new HashMap<String, String>();
@@ -1986,14 +1918,7 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         return masterPasswordArray;
     }
 
-    /**
-     * Writes a file containing info about the master password.
-     *
-     * @param file
-     * @param message
-     * @param masterPasswordArray
-     * @throws IOException
-     */
+    /** Writes a file containing info about the master password. */
     void writeMasterPasswordInfo(Resource file, String message, char[] masterPasswordArray)
             throws IOException {
         try (BufferedWriter w = new BufferedWriter(new OutputStreamWriter(file.out()))) {
@@ -2016,15 +1941,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
     }
 
     /**
-     * @param file
-     * @throws IOException
-     * @deprecated Use {@link #dumpMasterPassword(Resource)}
-     */
-    public boolean dumpMasterPassword(File file) throws IOException {
-        return dumpMasterPassword(Files.asResource(file));
-    }
-
-    /**
      * Method to dump master password to a file
      *
      * <p>The file name is the shared secret between the administrator and GeoServer.
@@ -2034,9 +1950,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
      *
      * <p>If authorization fails, a warning is written in the log and the return code is <code>false
      * </code>. On success, the return code is <code>true</code>.
-     *
-     * @param file
-     * @throws IOException
      */
     public boolean dumpMasterPassword(Resource file) throws IOException {
         if (file.getType() != Resource.Type.UNDEFINED) {
@@ -2079,8 +1992,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
      * authenticated principal has to be an administrator
      *
      * <p>If authorization fails, an IOException is thrown
-     *
-     * @throws IOException
      */
     public char[] getMasterPasswordForREST() throws IOException {
 
@@ -2104,9 +2015,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
     /**
      * Checks if the stack trace contains allowed methods. It it contains allowed methods, return
      * <code>null</code>, if not return a String listing the methods.
-     *
-     * @param countMethodsToCheck
-     * @param allowedMethods
      */
     String checkStackTrace(int countMethodsToCheck, String[][] allowedMethods) {
 
@@ -3064,7 +2972,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
      * <p>If an absolute path is used the Resource implementation is provided by {@link
      * Files#asResource(File)}.
      *
-     * @param configFileLocation
      * @return resource
      */
     Resource getConfigFile(String configFileLocation) throws IOException {
@@ -3171,11 +3078,7 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         }
     }
 
-    /**
-     * set the active {@link GeoServerRoleService}
-     *
-     * @param activeRoleService
-     */
+    /** set the active {@link GeoServerRoleService} */
     public void setActiveRoleService(GeoServerRoleService activeRoleService) {
         this.activeRoleService = activeRoleService;
     }
@@ -3271,8 +3174,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
         /**
          * Implement here XStream mappings and conversion behaviours needed to read incompatible
          * configurations during migration.
-         *
-         * @param xp
          */
         public void migrationPersister(XStreamPersister xp);
     }
@@ -3575,8 +3476,6 @@ public class GeoServerSecurityManager implements ApplicationContextAware, Applic
     /**
      * Calculates the union of roles from all role services and adds {@link
      * GeoServerRole#ANONYMOUS_ROLE} and {@link GeoServerRole#AUTHENTICATED_ROLE}
-     *
-     * @throws IOException
      */
     public SortedSet<GeoServerRole> getRolesForAccessControl() throws IOException {
 

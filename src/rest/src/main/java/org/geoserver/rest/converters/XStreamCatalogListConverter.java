@@ -55,7 +55,8 @@ public abstract class XStreamCatalogListConverter
             Class<? extends RestListWrapper<?>> clazz, HttpInputMessage inputMessage)
             throws IOException, HttpMessageNotReadableException {
         throw new HttpMessageNotReadableException(
-                getClass().getName() + " does not support deserialization of catalog lists");
+                getClass().getName() + " does not support deserialization of catalog lists",
+                inputMessage);
     }
     //
     // writing
@@ -87,7 +88,7 @@ public abstract class XStreamCatalogListConverter
                     }
 
                     @Override
-                    protected void writeItem(
+                    protected void writeCompleteItem(
                             Object item,
                             MarshallingContext context,
                             HierarchicalStreamWriter writer) {
@@ -130,7 +131,7 @@ public abstract class XStreamCatalogListConverter
                             throw new RuntimeException(
                                     "Could not determine identifier for: " + clazz.getName());
                         }
-                        writer.startNode("name");
+                        writer.startNode(wrapper.getItemAttributeName());
                         writer.setValue(ref);
                         writer.endNode();
 

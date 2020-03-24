@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.apache.commons.io.FileUtils;
 import org.geoserver.catalog.impl.ModificationProxy;
 import org.geoserver.config.util.SecureXStream;
@@ -24,12 +25,15 @@ import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.platform.resource.FileSystemWatcher;
 import org.geowebcache.config.ContextualConfigurationProvider.Context;
 import org.geowebcache.config.XMLConfiguration;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.springframework.web.context.WebApplicationContext;
 
 public class DefaultTileLayerCatalogTest {
+
+    public @Rule TemporaryFolder tmpFolder = new TemporaryFolder();
 
     private File baseDirectory;
 
@@ -39,23 +43,18 @@ public class DefaultTileLayerCatalogTest {
 
     @Before
     public void setUp() throws Exception {
-        baseDirectory = new File("target", "mockTileLayerCatalog");
-        FileUtils.deleteDirectory(baseDirectory);
-        baseDirectory.mkdirs();
+        baseDirectory = tmpFolder.getRoot();
         resourceLoader = new GeoServerResourceLoader(baseDirectory);
 
         new File(baseDirectory, "gwc-layers").mkdir();
 
-        XStream xStream =
-                XMLConfiguration.getConfiguredXStreamWithContext(
-                        new SecureXStream(), (WebApplicationContext) null, Context.PERSIST);
+        Supplier<XStream> xStream =
+                () ->
+                        XMLConfiguration.getConfiguredXStreamWithContext(
+                                new SecureXStream(), (WebApplicationContext) null, Context.PERSIST);
 
         catalog = new DefaultTileLayerCatalog(resourceLoader, xStream);
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        FileUtils.deleteDirectory(baseDirectory);
+        catalog.initialize();
     }
 
     @Test
@@ -204,7 +203,8 @@ public class DefaultTileLayerCatalogTest {
 
         FileUtils.writeStringToFile(
                 file,
-                "<org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl><id>id1</id><name>originalname</name></org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl>");
+                "<org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl><id>id1</id><name>originalname</name></org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl>",
+                "UTF-8");
 
         waitForFlag(hasBeenCreated, 200);
         GeoServerTileLayerInfo info = catalog.getLayerById("id1");
@@ -217,7 +217,8 @@ public class DefaultTileLayerCatalogTest {
 
         FileUtils.writeStringToFile(
                 file,
-                "<org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl><id>id1</id><name>newname</name></org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl>");
+                "<org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl><id>id1</id><name>newname</name></org.geoserver.gwc.layer.GeoServerTileLayerInfoImpl>",
+                "UTF-8");
 
         waitForFlag(hasBeenModified, 200);
 

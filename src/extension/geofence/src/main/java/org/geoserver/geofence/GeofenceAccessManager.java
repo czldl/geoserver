@@ -14,19 +14,7 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.http.HttpServletRequest;
-import org.geoserver.catalog.Catalog;
-import org.geoserver.catalog.CatalogInfo;
-import org.geoserver.catalog.CoverageInfo;
-import org.geoserver.catalog.FeatureTypeInfo;
-import org.geoserver.catalog.LayerGroupInfo;
-import org.geoserver.catalog.LayerInfo;
-import org.geoserver.catalog.Predicates;
-import org.geoserver.catalog.PublishedInfo;
-import org.geoserver.catalog.ResourceInfo;
-import org.geoserver.catalog.StoreInfo;
-import org.geoserver.catalog.StyleInfo;
-import org.geoserver.catalog.WMSLayerInfo;
-import org.geoserver.catalog.WorkspaceInfo;
+import org.geoserver.catalog.*;
 import org.geoserver.geofence.config.GeoFenceConfiguration;
 import org.geoserver.geofence.config.GeoFenceConfigurationManager;
 import org.geoserver.geofence.core.model.LayerAttribute;
@@ -45,15 +33,7 @@ import org.geoserver.platform.ExtensionPriority;
 import org.geoserver.platform.Operation;
 import org.geoserver.platform.Service;
 import org.geoserver.platform.ServiceException;
-import org.geoserver.security.CatalogMode;
-import org.geoserver.security.CoverageAccessLimits;
-import org.geoserver.security.DataAccessLimits;
-import org.geoserver.security.LayerGroupAccessLimits;
-import org.geoserver.security.ResourceAccessManager;
-import org.geoserver.security.StyleAccessLimits;
-import org.geoserver.security.VectorAccessLimits;
-import org.geoserver.security.WMSAccessLimits;
-import org.geoserver.security.WorkspaceAccessLimits;
+import org.geoserver.security.*;
 import org.geoserver.security.impl.GeoServerRole;
 import org.geoserver.wms.GetFeatureInfoRequest;
 import org.geoserver.wms.GetLegendGraphicRequest;
@@ -299,7 +279,7 @@ public class GeofenceAccessManager
                 LOGGER.log(
                         Level.FINE,
                         "Admin level access, returning " + "full rights for layer {0}",
-                        resource.getPrefixedName());
+                        resource.prefixedName());
 
                 return buildAccessLimits(resource, AccessInfo.ALLOW_ALL);
             }
@@ -372,7 +352,7 @@ public class GeofenceAccessManager
         LOGGER.log(
                 Level.FINE,
                 "Returning {0} for layer {1} and user {2}",
-                new Object[] {limits, resource.getPrefixedName(), username});
+                new Object[] {limits, resource.prefixedName(), username});
 
         return limits;
     }
@@ -405,10 +385,7 @@ public class GeofenceAccessManager
         }
     }
 
-    /**
-     * @param resource
-     * @param rule
-     */
+    /** */
     DataAccessLimits buildAccessLimits(ResourceInfo resource, AccessInfo rule) {
         // basic filter
         Filter readFilter = (rule.getGrant() == GrantType.ALLOW) ? Filter.INCLUDE : Filter.EXCLUDE;
@@ -496,6 +473,10 @@ public class GeofenceAccessManager
             MultiPolygon rasterFilter = buildRasterFilter(rule);
 
             return new WMSAccessLimits(catalogMode, readFilter, rasterFilter, true);
+        } else if (resource instanceof WMTSLayerInfo) {
+            MultiPolygon rasterFilter = buildRasterFilter(rule);
+
+            return new WMTSAccessLimits(catalogMode, readFilter, rasterFilter);
         } else {
             throw new IllegalArgumentException("Don't know how to handle resource " + resource);
         }
@@ -524,12 +505,7 @@ public class GeofenceAccessManager
         return rasterFilter;
     }
 
-    /**
-     * Merges the two filters into one by AND
-     *
-     * @param filter
-     * @param areaFilter
-     */
+    /** Merges the two filters into one by AND */
     private Filter mergeFilter(Filter filter, Filter areaFilter) {
         if ((filter == null) || (filter == Filter.INCLUDE)) {
             return areaFilter;
@@ -540,12 +516,7 @@ public class GeofenceAccessManager
         }
     }
 
-    /**
-     * Builds the equivalent {@link PropertyName} list for the specified access mode
-     *
-     * @param attributes
-     * @param mode
-     */
+    /** Builds the equivalent {@link PropertyName} list for the specified access mode */
     private List<PropertyName> toPropertyNames(
             Set<LayerAttribute> attributes, PropertyAccessMode mode) {
         // handle simple case
@@ -853,7 +824,7 @@ public class GeofenceAccessManager
         String rawLayersParameter = (String) gsRequest.getRawKvp().get("LAYERS");
         if (rawLayersParameter != null) {
             List<String> layersNames = KvpUtils.readFlat(rawLayersParameter);
-            return new LayersParser()
+            return LayersParser.getInstance()
                     .parseLayers(layersNames, getMap.getRemoteOwsURL(), getMap.getRemoteOwsType());
         }
         return new ArrayList<>();
@@ -870,7 +841,14 @@ public class GeofenceAccessManager
     /** An helper that avoids duplicating the code to parse the layers parameter */
     static final class LayersParser extends GetMapKvpRequestReader {
 
-        public LayersParser() {
+        private static LayersParser singleton = null;
+
+        public static LayersParser getInstance() {
+            if (singleton == null) singleton = new LayersParser();
+            return singleton;
+        }
+
+        private LayersParser() {
             super(WMS.get());
         }
 

@@ -5,15 +5,15 @@
  */
 package org.geoserver.gwc;
 
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertFalse;
-import static junit.framework.Assert.assertNotNull;
-import static junit.framework.Assert.assertTrue;
 import static org.custommonkey.xmlunit.XMLAssert.assertXpathEvaluatesTo;
 import static org.custommonkey.xmlunit.XMLAssert.assertXpathExists;
 import static org.custommonkey.xmlunit.XMLAssert.assertXpathNotExists;
 import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -101,8 +101,10 @@ public class RESTIntegrationTest extends GeoServerSystemTestSupport {
         assertXpathEvaluatesTo("true", "/GeoServerLayer/enabled", dom);
         assertXpathEvaluatesTo("image/png", "/GeoServerLayer/mimeFormats/string[1]", dom);
         assertXpathEvaluatesTo("image/jpeg", "/GeoServerLayer/mimeFormats/string[2]", dom);
-        assertXpathEvaluatesTo(
-                "EPSG:900913", "/GeoServerLayer/gridSubsets/gridSubset[1]/gridSetName", dom);
+
+        assertXpathEvaluatesTo("2", "count(/GeoServerLayer/gridSubsets/gridSubset)", dom);
+        assertXpathExists("/GeoServerLayer/gridSubsets/gridSubset[gridSetName='EPSG:900913']", dom);
+        assertXpathExists("/GeoServerLayer/gridSubsets/gridSubset[gridSetName='EPSG:4326']", dom);
         assertXpathNotExists("/GeoServerLayer/autoCacheStyles", dom);
     }
 
@@ -213,7 +215,7 @@ public class RESTIntegrationTest extends GeoServerSystemTestSupport {
         assertEquals(
                 expected,
                 response.getContentAsString()
-                        .substring(response.getContentAsString().indexOf(":") + 2));
+                        .substring(response.getContentAsString().indexOf(":") + 1));
     }
 
     @Test
@@ -318,9 +320,9 @@ public class RESTIntegrationTest extends GeoServerSystemTestSupport {
 
         assertEquals("ELEVATION", floatFilter.getKey());
         assertEquals("10.1", floatFilter.getDefaultValue());
-        assertEquals(1.0E-2f, floatFilter.getThreshold());
+        assertEquals(1.0E-2f, floatFilter.getThreshold(), 0d);
         assertEquals(
-                ImmutableList.of(new Float(10.1f), new Float(10.2f), new Float(10.3f)),
+                ImmutableList.of(Float.valueOf(10.1f), Float.valueOf(10.2f), Float.valueOf(10.3f)),
                 floatFilter.getValues());
 
         assertEquals("BGCOLOR", stringFilter.getKey());
@@ -441,10 +443,7 @@ public class RESTIntegrationTest extends GeoServerSystemTestSupport {
         MockHttpServletResponse response = super.deleteAsServletResponse(url);
         assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatus());
         // See GWC's TileLayerRestlet
-        assertEquals(
-                "Unknown layer: badLayerName",
-                response.getContentAsString()
-                        .substring(response.getContentAsString().indexOf(":") + 2));
+        assertEquals("Unknown layer: badLayerName", response.getContentAsString());
     }
 
     @Test
@@ -517,9 +516,9 @@ public class RESTIntegrationTest extends GeoServerSystemTestSupport {
 
         assertEquals("ELEVATION", floatFilter.getKey());
         assertEquals("10.1", floatFilter.getDefaultValue());
-        assertEquals(1.0E-2f, floatFilter.getThreshold());
+        assertEquals(1.0E-2f, floatFilter.getThreshold(), 0d);
         assertEquals(
-                ImmutableList.of(new Float(10.1f), new Float(10.2f), new Float(10.3f)),
+                ImmutableList.of(Float.valueOf(10.1f), Float.valueOf(10.2f), Float.valueOf(10.3f)),
                 floatFilter.getValues());
 
         assertEquals("STYLES", styleFilter.getKey());

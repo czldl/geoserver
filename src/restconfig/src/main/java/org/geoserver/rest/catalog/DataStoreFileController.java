@@ -123,7 +123,7 @@ public class DataStoreFileController extends AbstractStoreUploadController {
         if (factoryClassName != null) {
             try {
                 Class factoryClass = Class.forName(factoryClassName);
-                return (DataAccessFactory) factoryClass.newInstance();
+                return (DataAccessFactory) factoryClass.getDeclaredConstructor().newInstance();
             } catch (Exception e) {
                 throw new RestException(
                         "Datastore format unavailable: " + factoryClassName,
@@ -216,30 +216,26 @@ public class DataStoreFileController extends AbstractStoreUploadController {
             throw new RestException("No files for datastore " + storeName, HttpStatus.NOT_FOUND);
         }
 
-        try {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            BufferedOutputStream bufferedOutputStream =
-                    new BufferedOutputStream(byteArrayOutputStream);
-            ZipOutputStream zipOutputStream = new ZipOutputStream(bufferedOutputStream);
-
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                BufferedOutputStream bufferedOutputStream =
+                        new BufferedOutputStream(byteArrayOutputStream);
+                ZipOutputStream zipOutputStream = new ZipOutputStream(bufferedOutputStream)) {
             // packing files
-            for (File file : directory.listFiles()) {
-                // new zip entry and copying inputstream with file to zipOutputStream, after all
-                // closing streams
-                zipOutputStream.putNextEntry(new ZipEntry(file.getName()));
-                FileInputStream fileInputStream = new FileInputStream(file);
-
-                IOUtils.copy(fileInputStream, zipOutputStream);
-
-                fileInputStream.close();
-                zipOutputStream.closeEntry();
+            File[] files = directory.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    // new zip entry and copying inputstream with file to zipOutputStream, after all
+                    // closing streams
+                    zipOutputStream.putNextEntry(new ZipEntry(file.getName()));
+                    try (FileInputStream fileInputStream = new FileInputStream(file)) {
+                        IOUtils.copy(fileInputStream, zipOutputStream);
+                    }
+                    zipOutputStream.closeEntry();
+                }
             }
 
             zipOutputStream.finish();
             zipOutputStream.flush();
-            IOUtils.closeQuietly(zipOutputStream);
-            IOUtils.closeQuietly(bufferedOutputStream);
-            IOUtils.closeQuietly(byteArrayOutputStream);
 
             HttpHeaders responseHeaders = new HttpHeaders();
             responseHeaders.add(
@@ -411,11 +407,12 @@ public class DataStoreFileController extends AbstractStoreUploadController {
                         continue;
                     }
 
+                    @SuppressWarnings("PMD.CloseResource") // no try-with-resource to rollback
                     Transaction tx = new DefaultTransaction();
-                    FeatureStore featureStore = (FeatureStore) featureSource;
-                    featureStore.setTransaction(tx);
-
                     try {
+                        FeatureStore featureStore = (FeatureStore) featureSource;
+                        featureStore.setTransaction(tx);
+
                         // figure out update mode, whether we should kill existing data or append
                         if ("overwrite".equalsIgnoreCase(update)) {
                             LOGGER.fine("Removing existing features from " + featureTypeName);
@@ -482,7 +479,6 @@ public class DataStoreFileController extends AbstractStoreUploadController {
                 // TODO: set lat lon bounding box
 
                 if (ftinfo.getId() == null) {
-
                     // do a check for a type already named this name in the catalog, if it is
                     // already
                     // there try to rename it
@@ -497,9 +493,7 @@ public class DataStoreFileController extends AbstractStoreUploadController {
                         do {
                             ftinfo.setName(originalName + x);
                             x++;
-                        } while (x < 10
-                                && catalog.getFeatureTypeByName(namespace, ftinfo.getName())
-                                        != null);
+                        } while (catalog.getFeatureTypeByName(namespace, ftinfo.getName()) != null);
                     }
                     catalog.validate(ftinfo, true).throwIfInvalid();
                     catalog.add(ftinfo);
@@ -564,7 +558,6 @@ public class DataStoreFileController extends AbstractStoreUploadController {
      *     on server)
      * @param storeName The name of the store being added
      * @param format The store format.
-     * @throws IOException
      */
     protected List<Resource> doFileUpload(
             UploadMethod method,

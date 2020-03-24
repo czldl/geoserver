@@ -40,10 +40,7 @@ public class SLDNamedLayerRenameHelper {
         this.catalog = catalog;
     }
 
-    /**
-     * @param catalog
-     * @param skipErrors Skip styles that throw an exception when visited
-     */
+    /** @param skipErrors Skip styles that throw an exception when visited */
     public SLDNamedLayerRenameHelper(Catalog catalog, boolean skipErrors) {
         this.catalog = catalog;
         this.skipErrors = skipErrors;
@@ -54,7 +51,6 @@ public class SLDNamedLayerRenameHelper {
      * but not yet committed to the catalog, get the list of styles that would be affected by this
      * rename, and optionally apply this rename to those styles.
      *
-     * @param catalog
      * @param updatedInfo The {@link StyleInfo}, {@link LayerInfo}, or {@link LayerGroupInfo} that
      *     has been renamed
      * @param doRename should the styles which have been found be renamed
@@ -158,7 +154,8 @@ public class SLDNamedLayerRenameHelper {
         // copy over the style contents
         try (BufferedReader reader = catalog.getResourcePool().readStyle(s)) {
             catalog.getResourcePool()
-                    .writeStyle(backup, new ByteArrayInputStream(IOUtils.toByteArray(reader)));
+                    .writeStyle(
+                            backup, new ByteArrayInputStream(IOUtils.toByteArray(reader, "UTF-8")));
         }
         return backup;
     }

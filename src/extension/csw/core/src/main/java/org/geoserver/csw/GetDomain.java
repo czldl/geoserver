@@ -61,11 +61,7 @@ public class GetDomain {
         }
     }
 
-    /**
-     * Returns the requested feature types
-     *
-     * @param request
-     */
+    /** Returns the requested feature types */
     public CloseableIterator<String> run(GetDomainType request) {
         try {
             List<String> result = new ArrayList<String>();
@@ -75,9 +71,9 @@ public class GetDomain {
                     final String operation = parameterName.split("\\.")[0];
                     final String parameter = parameterName.split("\\.")[1];
 
-                    if (GetCapabilities.operationParameters.get(operation) != null) {
+                    if (store.getCapabilities().getOperationParameters().get(operation) != null) {
                         for (DomainType param :
-                                GetCapabilities.operationParameters.get(operation)) {
+                                store.getCapabilities().getOperationParameters().get(operation)) {
                             if (param.getName().equalsIgnoreCase(parameter)) {
                                 for (Object value : param.getValue()) {
                                     result.add((String) value);

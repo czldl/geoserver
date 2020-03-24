@@ -53,11 +53,7 @@ public class SingleGridCoverage2DReader implements GridCoverage2DReader {
         this.coverageName = coverageName;
     }
 
-    /**
-     * Checks the specified name is the one we are expecting
-     *
-     * @param coverageName
-     */
+    /** Checks the specified name is the one we are expecting */
     protected void checkCoverageName(String coverageName) {
         if (!this.coverageName.equals(coverageName)) {
             throw new IllegalArgumentException(
@@ -92,22 +88,6 @@ public class SingleGridCoverage2DReader implements GridCoverage2DReader {
     public String getMetadataValue(String coverageName, String name) throws IOException {
         checkCoverageName(coverageName);
         return delegate.getMetadataValue(coverageName, name);
-    }
-
-    public String[] listSubNames() throws IOException {
-        return delegate.listSubNames();
-    }
-
-    public String getCurrentSubname() throws IOException {
-        return delegate.getCurrentSubname();
-    }
-
-    public boolean hasMoreGridCoverages() throws IOException {
-        return delegate.hasMoreGridCoverages();
-    }
-
-    public void skip() throws IOException {
-        delegate.skip();
     }
 
     public void dispose() throws IOException {
@@ -191,15 +171,6 @@ public class SingleGridCoverage2DReader implements GridCoverage2DReader {
 
     public int getGridCoverageCount() throws IOException {
         return delegate.getGridCoverageCount();
-    }
-
-    public int getNumOverviews() {
-        return delegate.getNumOverviews(coverageName);
-    }
-
-    public int getNumOverviews(String coverageName) {
-        checkCoverageName(coverageName);
-        return delegate.getNumOverviews(coverageName);
     }
 
     public ImageLayout getImageLayout() throws IOException {

@@ -7,7 +7,7 @@ package org.geoserver.wps.gs.download;
 
 import it.geosolutions.imageio.stream.output.ImageOutputStreamAdapter;
 import it.geosolutions.io.output.adapter.OutputStreamAdapter;
-import java.awt.Color;
+import it.geosolutions.jaiext.utilities.ImageLayout2;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
@@ -17,15 +17,13 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.stream.ImageOutputStream;
-import javax.media.jai.BorderExtender;
-import javax.media.jai.ImageLayout;
-import javax.media.jai.Interpolation;
-import javax.media.jai.JAI;
+import javax.media.jai.*;
 import javax.media.jai.operator.MosaicDescriptor;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -44,18 +42,21 @@ import org.geotools.coverage.grid.io.AbstractGridFormat;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
 import org.geotools.coverage.processing.Operations;
 import org.geotools.data.Parameter;
+import org.geotools.gce.imagemosaic.ImageMosaicFormat;
 import org.geotools.geometry.GeneralEnvelope;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.geometry.jts.ReferencedEnvelope;
 import org.geotools.process.ProcessException;
 import org.geotools.process.raster.BandSelectProcess;
 import org.geotools.process.raster.CropCoverage;
-import org.geotools.referencing.CRS;
 import org.geotools.referencing.operation.builder.GridToEnvelopeMapper;
 import org.geotools.referencing.operation.transform.ProjectiveTransform;
-import org.geotools.renderer.lite.gridcoverage2d.GridCoverageRenderer;
-import org.geotools.styling.RasterSymbolizer;
-import org.geotools.styling.RasterSymbolizerImpl;
+import org.geotools.renderer.crs.ProjectionHandler;
+import org.geotools.renderer.crs.ProjectionHandlerFinder;
+import org.geotools.renderer.crs.WrappingProjectionHandler;
+import org.geotools.renderer.lite.gridcoverage2d.GridCoverageReaderHelper;
+import org.geotools.renderer.lite.gridcoverage2d.GridCoverageRendererUtilities;
+import org.geotools.util.factory.Hints;
 import org.geotools.util.logging.Logging;
 import org.locationtech.jts.geom.Geometry;
 import org.opengis.coverage.grid.GridEnvelope;
@@ -93,8 +94,6 @@ class RasterDownload {
 
     private static final GridCoverageFactory GC_FACTORY = new GridCoverageFactory();
 
-    private static final RasterSymbolizer RS = new RasterSymbolizerImpl();
-
     private static final BorderExtender BORDER_EXTENDER_COPY =
             BorderExtender.createInstance(BorderExtender.BORDER_COPY);
 
@@ -112,8 +111,6 @@ class RasterDownload {
      * @param limits the {@link DownloadEstimatorProcess} to check for not exceeding the download
      *     limits.
      * @param resourceManager the {@link WPSResourceManager} to handl generated resources
-     * @param context
-     * @param catalog
      */
     public RasterDownload(
             DownloadServiceConfiguration limits,
@@ -151,6 +148,12 @@ class RasterDownload {
      * @param targetSizeY the size of the target image along the Y axis
      * @param bandIndices the indices of the bands used for the final result
      * @param writeParams optional writing params
+     * @param minimizeReprojections When dealing with a Heterogeneous CRS mosaic, avoid
+     *     reprojections of the granules within the ROI, having their nativeCRS equal to the
+     *     targetCRS
+     * @param bestResolutionOnMatchingCRS When dealing with a Heterogeneous CRS mosaic, given a ROI
+     *     and a TargetCRS, with no target size being specified, get the best resolution of data
+     *     having nativeCrs matching the TargetCRS
      */
     public Resource execute(
             String mimeType,
@@ -164,46 +167,28 @@ class RasterDownload {
             Integer targetSizeX,
             Integer targetSizeY,
             int[] bandIndices,
-            Parameters writeParams)
+            Parameters writeParams,
+            boolean minimizeReprojections,
+            boolean bestResolutionOnMatchingCRS)
             throws Exception {
 
         List<GridCoverage2D> disposableSources = new ArrayList<GridCoverage2D>();
         GridCoverage2D gridCoverage = null;
         try {
-
-            CoordinateReferenceSystem nativeCRS = DownloadUtilities.getNativeCRS(coverageInfo);
-            if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Native CRS is " + nativeCRS.toWKT());
-            }
-
-            //
-            // check reprojection
-            //
-            boolean reproject = false;
-            MathTransform reprojectionTrasform = null;
-            if (targetCRS != null && !CRS.equalsIgnoreMetadata(nativeCRS, targetCRS)) {
-                if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.log(Level.FINE, "Checking if reprojection is needed");
-                }
-                // testing reprojection...
-                reprojectionTrasform = CRS.findMathTransform(nativeCRS, targetCRS, true);
-                if (!reprojectionTrasform.isIdentity()) {
-                    // avoid doing the transform if this is the identity
-                    reproject = true;
-                    if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.log(Level.FINE, "Reprojection needed");
-                    }
-                }
-            } else {
-                targetCRS = nativeCRS;
-            }
-
             // get a reader for this CoverageInfo
             if (LOGGER.isLoggable(Level.FINE)) {
                 LOGGER.log(Level.FINE, "Getting reader for the coverage");
             }
             final GridCoverage2DReader reader =
                     (GridCoverage2DReader) coverageInfo.getGridCoverageReader(null, null);
+
+            CRSRequestHandler crsRequestHandler =
+                    new CRSRequestHandler(reader, catalog, targetCRS, roi);
+            crsRequestHandler.setFilter(filter);
+            crsRequestHandler.setMinimizeReprojections(minimizeReprojections);
+            crsRequestHandler.setUseBestResolutionOnMatchingCRS(bestResolutionOnMatchingCRS);
+            crsRequestHandler.init();
+            boolean useTargetCrsAsNative = crsRequestHandler.canUseTargetCRSAsNative();
             final ParameterValueGroup readParametersDescriptor =
                     reader.getFormat().getReadParameters();
             final List<GeneralParameterDescriptor> parameterDescriptors =
@@ -215,25 +200,7 @@ class RasterDownload {
 
             // read GridGeometry preparation and scaling setup if needed
             GridGeometry2D requestedGridGeometry = null;
-            ReferencedEnvelope targetEnvelope = null;
             boolean isImposedTargetSize = targetSizeX != null || targetSizeY != null;
-
-            ROIManager roiManager = null;
-            if (roi != null) {
-                roiManager = new ROIManager(roi, (CoordinateReferenceSystem) roi.getUserData());
-
-                // set crs in roi manager
-                roiManager.useNativeCRS(reader.getCoordinateReferenceSystem());
-                roiManager.useTargetCRS(targetCRS);
-                targetEnvelope =
-                        new ReferencedEnvelope(
-                                roiManager.getRoiInTargetCRS().getEnvelopeInternal(), targetCRS);
-            } else {
-                targetEnvelope = new ReferencedEnvelope(reader.getOriginalEnvelope());
-                if (reproject) {
-                    targetEnvelope = targetEnvelope.transform(targetCRS, true);
-                }
-            }
 
             if (targetSizeX == null && targetSizeY == null) {
                 // No size is specified. Just do a read and reproject (if needed) + a final crop
@@ -243,8 +210,7 @@ class RasterDownload {
                             "No Target size has been specified. Requested GridGeometry "
                                     + "will be automatically computed");
                 }
-                GridGeometryProvider provider =
-                        new GridGeometryProvider(reader, roiManager, filter, catalog);
+                GridGeometryProvider provider = new GridGeometryProvider(crsRequestHandler);
                 requestedGridGeometry = provider.getGridGeometry();
 
                 if (LOGGER.isLoggable(Level.FINE)) {
@@ -273,13 +239,24 @@ class RasterDownload {
                 // dirty job
                 requestedGridGeometry =
                         new GridGeometry2D(
-                                new GridEnvelope2D(0, 0, targetSizeX, targetSizeY), targetEnvelope);
+                                new GridEnvelope2D(0, 0, targetSizeX, targetSizeY),
+                                crsRequestHandler.getTargetEnvelope());
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.log(
                             Level.FINE,
                             "Target size has been specified. Setting up requested GridGeometry: "
                                     + requestedGridGeometry.toString());
                 }
+            }
+
+            if (useTargetCrsAsNative) {
+                readParameters =
+                        CoverageUtils.mergeParameter(
+                                Collections.singletonList(
+                                        ImageMosaicFormat.OUTPUT_TO_ALTERNATIVE_CRS),
+                                readParameters,
+                                true,
+                                ImageMosaicFormat.OUTPUT_TO_ALTERNATIVE_CRS.getName().getCode());
             }
 
             readParameters =
@@ -293,16 +270,13 @@ class RasterDownload {
             //
             gridCoverage =
                     readAndReproject(
-                            reader,
                             readParameters,
-                            targetCRS,
-                            targetEnvelope,
                             targetSizeX,
                             targetSizeY,
                             interpolation,
                             backgroundValues,
                             isImposedTargetSize,
-                            reproject,
+                            crsRequestHandler,
                             disposableSources);
 
             // Add a bandSelectProcess call if the reader doesn't support bands
@@ -374,7 +348,7 @@ class RasterDownload {
                     final CropCoverage cropCoverage = new CropCoverage();
 
                     // Get the proper ROI (depending on clip parameter and CRS)
-                    Geometry croppingRoi = roiManager.getTargetRoi(clip);
+                    Geometry croppingRoi = crsRequestHandler.getRoiManager().getTargetRoi(clip);
                     disposableSources.add(gridCoverage);
                     gridCoverage =
                             cropCoverage.execute(gridCoverage, croppingRoi, progressListener);
@@ -399,60 +373,122 @@ class RasterDownload {
         }
     }
 
-    /**
-     * Read and reproject. It may delegate the operations to a GridCoverageRenderer in case target
-     * size has been specified.
-     */
+    /** Read and reproject. */
     private GridCoverage2D readAndReproject(
-            GridCoverage2DReader reader,
             GeneralParameterValue[] readParameters,
-            CoordinateReferenceSystem targetCRS,
-            ReferencedEnvelope targetEnvelope,
             Integer targetSizeX,
             Integer targetSizeY,
             Interpolation interpolation,
             double[] backgroundValues,
             boolean isImposedTargetSize,
-            boolean reproject,
+            CRSRequestHandler crsRequestHandler,
             List<GridCoverage2D> disposableSources)
             throws TransformException, NoninvertibleTransformException, FactoryException,
                     IOException {
 
+        GridCoverage2DReader reader = crsRequestHandler.getReader();
+        CoordinateReferenceSystem targetCRS = crsRequestHandler.getSelectedTargetCRS();
         if (isImposedTargetSize) {
-            // Delegate the GridCoverageRenderer to do all the work of reprojection/interpolation
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.log(Level.FINE, "Target Size has been imposed");
+            // mimic the GridCoverageRenderer logic without raster symbolization in place
+            // and other colorMap related steps
+            CoordinateReferenceSystem sourceCRS = crsRequestHandler.getSelectedNativeCRS();
+            Rectangle destinationSize = new Rectangle(0, 0, targetSizeX, targetSizeY);
 
-            if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.log(
-                        Level.FINE,
-                        "Target Size has been imposed. Delegating to GridCoverageRenderer");
+            GeneralEnvelope destinationEnvelope =
+                    new GeneralEnvelope(
+                            new ReferencedEnvelope(
+                                    crsRequestHandler.getTargetEnvelope(), targetCRS));
+            AffineTransform finalWorldToGrid =
+                    computeWorldToGrid(destinationEnvelope, destinationSize);
+            Hints hints = prepareHints(interpolation);
+
+            List<GridCoverage2D> coverages;
+            // read all the coverages we need, cut and whatnot
+            GridCoverageReaderHelper rh =
+                    new GridCoverageReaderHelper(
+                            reader,
+                            destinationSize,
+                            ReferencedEnvelope.reference(destinationEnvelope),
+                            interpolation,
+                            hints);
+
+            ProjectionHandler handler = null;
+            if (!crsRequestHandler.canUseTargetCRSAsNative()) {
+                handler = ProjectionHandlerFinder.getHandler(rh.getReadEnvelope(), sourceCRS, true);
+                if (handler instanceof WrappingProjectionHandler) {
+                    ((WrappingProjectionHandler) handler).setDatelineWrappingCheckEnabled(false);
+                }
             }
-            GridCoverageRenderer renderer =
-                    new GridCoverageRenderer(
-                            targetCRS,
-                            targetEnvelope,
-                            new Rectangle(0, 0, targetSizeX, targetSizeY),
-                            null,
-                            null);
+            coverages = rh.readCoverages(readParameters, handler, GC_FACTORY);
+            coverages =
+                    GridCoverageRendererUtilities.forceToValidBounds(
+                            coverages, handler, backgroundValues, targetCRS, hints);
 
-            Color color =
-                    backgroundValues != null
-                            ? new Color(
-                                    (int) backgroundValues[0],
-                                    (int) backgroundValues[0],
-                                    (int) backgroundValues[0])
-                            : Color.BLACK;
-            RenderedImage ri =
-                    renderer.renderImage(
-                            reader, readParameters, RS, interpolation, color, 512, 512);
-            if (ri == null) {
+            // reproject if needed
+            coverages =
+                    GridCoverageRendererUtilities.reproject(
+                            coverages,
+                            targetCRS,
+                            interpolation,
+                            destinationEnvelope,
+                            backgroundValues,
+                            GC_FACTORY,
+                            hints);
+
+            // displace them if needed via a projection handler
+            coverages =
+                    GridCoverageRendererUtilities.displace(
+                            coverages,
+                            handler,
+                            destinationEnvelope,
+                            sourceCRS,
+                            targetCRS,
+                            GC_FACTORY);
+
+            // remove displaced/reprojected coverages being outside of the destination envelope
+            GridCoverageRendererUtilities.removeNotIntersecting(coverages, destinationEnvelope);
+
+            List<GridCoverage2D> transformedCoverages = new ArrayList<>();
+            for (GridCoverage2D displaced : coverages) {
+                GridCoverage2D transformed =
+                        GridCoverageRendererUtilities.affine(
+                                displaced,
+                                interpolation,
+                                finalWorldToGrid,
+                                backgroundValues,
+                                true,
+                                GC_FACTORY,
+                                hints);
+                if (transformed != null) {
+                    transformedCoverages.add(transformed);
+                }
+            }
+            coverages = transformedCoverages;
+
+            GridCoverage2D mosaicked =
+                    GridCoverageRendererUtilities.mosaicSorted(
+                            coverages, destinationEnvelope, backgroundValues, hints);
+
+            // the mosaicking can cut off images that are just slightly out of the
+            // request (effect of the read buffer + a request touching the actual data area)
+            if (mosaicked == null) {
+                return null;
+            }
+
+            // at this point, we might have a coverage that's still slightly larger
+            // than the one requested, crop as needed
+            GridCoverage2D cropped =
+                    GridCoverageRendererUtilities.crop(
+                            mosaicked, destinationEnvelope, false, backgroundValues, hints);
+
+            if (cropped == null || cropped.getRenderedImage() == null) {
                 throw new WPSException(
                         "The reader did not return anything"
                                 + "It normally means there is nothing there, or the data got filtered out by the ROI or filter");
             }
-
-            // Get the parentCoverage associated to the renderedImage returned by the
-            // GridCoverageRenderer
-            return (GridCoverage2D) ri.getProperty("ParentCoverage");
+            return cropped;
         } else {
             // If not, proceed with standard read and reproject
 
@@ -469,7 +505,7 @@ class RasterDownload {
             }
 
             // Reproject if needed
-            if (reproject) {
+            if (crsRequestHandler.needsReprojection()) {
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.log(Level.FINE, "Reprojecting the coverage");
                 }
@@ -487,13 +523,43 @@ class RasterDownload {
         }
     }
 
-    /**
-     * Extract the backgroundValues which will be used for mosaicking operations.
-     *
-     * @param coverageParameters
-     * @param readParameters
-     * @return
-     */
+    private AffineTransform computeWorldToGrid(
+            GeneralEnvelope destinationEnvelope, Rectangle destinationSize)
+            throws NoninvertibleTransformException {
+        final GridToEnvelopeMapper gridToEnvelopeMapper = new GridToEnvelopeMapper();
+        gridToEnvelopeMapper.setPixelAnchor(PixelInCell.CELL_CORNER);
+        gridToEnvelopeMapper.setGridRange(new GridEnvelope2D(destinationSize));
+        gridToEnvelopeMapper.setEnvelope(destinationEnvelope);
+        AffineTransform finalGridToWorld =
+                new AffineTransform(gridToEnvelopeMapper.createAffineTransform());
+        AffineTransform finalWorldToGrid = finalGridToWorld.createInverse();
+        return finalWorldToGrid;
+    }
+
+    private Hints prepareHints(Interpolation interpolation) {
+        // Interpolation
+        Hints hints = new Hints(new RenderingHints(JAI.KEY_INTERPOLATION, interpolation));
+        hints.put(Hints.LENIENT_DATUM_SHIFT, Boolean.TRUE);
+        hints.add(
+                new RenderingHints(
+                        JAI.KEY_BORDER_EXTENDER,
+                        BorderExtender.createInstance(BorderExtender.BORDER_COPY)));
+        if (interpolation instanceof InterpolationNearest) {
+            hints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+            hints.add(new RenderingHints(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.TRUE));
+        } else {
+            hints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.TRUE));
+            hints.add(new RenderingHints(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.FALSE));
+        }
+
+        // Tile Size
+        final ImageLayout layout = new ImageLayout2();
+        layout.setTileGridXOffset(0).setTileGridYOffset(0).setTileHeight(512).setTileWidth(512);
+        hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+        return hints;
+    }
+
+    /** Extract the backgroundValues which will be used for mosaicking operations. */
     private double[] getBackgroundValues(
             Map<String, Serializable> coverageParameters, GeneralParameterValue[] readParameters) {
         double[] backgroundValues = null;
@@ -515,10 +581,6 @@ class RasterDownload {
     /**
      * Check if a crop operation is needed (meaning that the extent of the returned image contains
      * the requested extent).
-     *
-     * @param rasterData
-     * @param requestedRange
-     * @return
      */
     private boolean cropIsNeeded(RenderedImage rasterData, GridEnvelope requestedRange) {
         final int requestedW = requestedRange.getSpan(0);
@@ -551,15 +613,6 @@ class RasterDownload {
     /**
      * The requested region is wider than the returned coverage (the reader may have done a crop to
      * minimal extent). Extend the result to the requested region, using background value.
-     *
-     * @param gridCoverage
-     * @param requestedGridGeometry
-     * @param backgroundValues
-     * @return
-     * @throws NoninvertibleTransformException
-     * @throws IllegalStateException
-     * @throws TransformException
-     * @throws MismatchedDimensionException
      */
     private GridCoverage2D extendToRegion(
             GridCoverage2D gridCoverage,
@@ -625,13 +678,6 @@ class RasterDownload {
     /**
      * Apply bandSelection operation in case band indices have been specified but underlying reader
      * do not support bands param.
-     *
-     * @param reader
-     * @param readParameters
-     * @param bandIndices
-     * @param originalGridCoverage
-     * @param disposableSources
-     * @return
      */
     private GridCoverage2D bandSelect(
             GridCoverage2DReader reader,
@@ -695,12 +741,6 @@ class RasterDownload {
     /**
      * Update read parameters, taking into accounts filter (if specified), band selection parameters
      * as well as forcing deferred execution loading.
-     *
-     * @param readParameters
-     * @param parameterDescriptors
-     * @param bandIndices
-     * @param filter
-     * @return
      */
     private GeneralParameterValue[] updateReadParams(
             GeneralParameterValue[] readParameters,

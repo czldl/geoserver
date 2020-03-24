@@ -266,13 +266,7 @@ public class JDBCOpenSearchAccessTest {
         runScript("/product_test_data.sql", conn);
     }
 
-    /**
-     * Adds the granules table
-     *
-     * @param conn
-     * @throws SQLException
-     * @throws IOException
-     */
+    /** Adds the granules table */
     static void populateGranules(Connection conn) throws SQLException, IOException {
         runScript("/granule_test_data.sql", conn);
     }
@@ -420,7 +414,7 @@ public class JDBCOpenSearchAccessTest {
 
     @Test
     public void testCustomProductClassGranules() throws Exception {
-        System.out.println(osAccess.getNames());
+        // System.out.println(osAccess.getNames());
         FeatureSource<FeatureType, Feature> featureSource =
                 osAccess.getFeatureSource(new NameImpl(TEST_NAMESPACE, "GS_TEST"));
         assertEquals(0, featureSource.getCount(Query.ALL));

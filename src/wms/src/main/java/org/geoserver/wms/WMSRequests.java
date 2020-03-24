@@ -24,7 +24,6 @@ import org.geoserver.ows.util.ResponseUtils;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.wms.map.GetMapKvpRequestReader;
 import org.geotools.map.Layer;
-import org.geotools.map.MapLayer;
 import org.geotools.styling.Style;
 import org.locationtech.jts.geom.Envelope;
 import org.springframework.util.StringUtils;
@@ -44,7 +43,7 @@ public class WMSRequests {
      *
      * <p>The tile cache location is determined from {@link GeoServer#getTileCache()}. If the above
      * method returns null this method falls back to the behaviour of {@link
-     * #getGetMapUrl(WMSMapContent, MapLayer, Envelope, String[])}.
+     * #getGetMapUrl(WMSMapContent, Layer, Envelope, String[])}.
      *
      * <p>If the <tt>layer</tt> argument is <code>null</code>, the request is made including all
      * layers in the <tt>mapContexT</tt>.
@@ -57,7 +56,6 @@ public class WMSRequests {
      * @param layerIndex The index of the layer in the request
      * @param bbox The bounding box of the request, may be <code>null</code>.
      * @param kvp Additional or overidding kvp parameters, may be <code>null</code>
-     * @param geoserver
      * @return The full url for a getMap request.
      */
     public static String getTiledGetMapUrl(
@@ -522,8 +520,6 @@ public class WMSRequests {
      * Copy the Entry matching the key from the kvp map and put it into the formatOptions map. If a
      * parameter is already present in formatOption map its value will be preserved.
      *
-     * @param kvp
-     * @param formatOptions
      * @param key the key to parse
      * @throws Exception - In the event of an unsuccesful parse.
      */

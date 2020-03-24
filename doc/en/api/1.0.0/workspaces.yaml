@@ -4,6 +4,12 @@ info:
   version: 1.0.0
   title: GeoServer Workspace
   description: A workspace is a grouping of data stores. Similar to a namespace, it is used to group data that is related in some way.
+  contact:
+    name: GeoServer
+    email: 'geoserver-users@sourceforge.net'
+    url: 'http://geoserver.org/comm/'
+host: localhost:8080
+basePath: /geoserver/rest
 
 paths:
   /workspaces:
@@ -115,6 +121,11 @@ paths:
           in: path
           required: true
           type: string
+        - name: quietOnNotFound
+          in: query
+          required: false
+          description: The quietOnNotFound parameter avoids logging an exception when the workspace is not present. Note that 404 status code will still be returned.
+          type: boolean
       responses:
         200:  
           description: OK

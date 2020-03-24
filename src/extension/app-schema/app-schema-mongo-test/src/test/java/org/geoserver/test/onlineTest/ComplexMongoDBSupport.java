@@ -4,6 +4,10 @@
  */
 package org.geoserver.test.onlineTest;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assume.assumeTrue;
+
 import com.mongodb.BasicDBObject;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientOptions;
@@ -43,11 +47,8 @@ import org.geoserver.util.IOUtils;
 import org.geotools.feature.NameImpl;
 import org.geotools.image.test.ImageAssert;
 import org.geotools.util.URLs;
-import static org.hamcrest.CoreMatchers.is;
 import org.hamcrest.MatcherAssert;
 import org.junit.AfterClass;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assume.assumeTrue;
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -63,18 +64,19 @@ public abstract class ComplexMongoDBSupport extends GeoServerSystemTestSupport {
     private static final Logger LOGGER =
             org.geotools.util.logging.Logging.getLogger(ComplexMongoDBSupport.class);
 
-    private static final Path ROOT_DIRECTORY = createTempDir();
+    protected static final Path ROOT_DIRECTORY = createTempDir();
 
     private static File APP_SCHEMA_MAPPINGS;
 
+    protected static final String STATIONS_STORE_NAME = UUID.randomUUID().toString();
     private static final String STATIONS_DATA_BASE_NAME = UUID.randomUUID().toString();
-    private static final String STATIONS_COLLECTION_NAME = "stations";
+    protected static final String STATIONS_COLLECTION_NAME = "stations";
 
     private static MongoClient MONGO_CLIENT;
 
     // xpath engines used to check WFS responses
-    private XpathEngine WFS11_XPATH_ENGINE;
-    private XpathEngine WFS20_XPATH_ENGINE;
+    protected XpathEngine WFS11_XPATH_ENGINE;
+    protected XpathEngine WFS20_XPATH_ENGINE;
 
     @Before
     public void beforeTest() {
@@ -140,7 +142,7 @@ public abstract class ComplexMongoDBSupport extends GeoServerSystemTestSupport {
         params.put("dbtype", "app-schema");
         params.put("url", "file:" + APP_SCHEMA_MAPPINGS.getAbsolutePath());
         DataStoreInfoImpl dataStore = new DataStoreInfoImpl(getCatalog());
-        dataStore.setName(UUID.randomUUID().toString());
+        dataStore.setName(STATIONS_STORE_NAME);
         dataStore.setType("app-schema");
         dataStore.setConnectionParameters(params);
         dataStore.setWorkspace(workspace);
@@ -229,6 +231,7 @@ public abstract class ComplexMongoDBSupport extends GeoServerSystemTestSupport {
                 "c",
                 "1482146935",
                 "25.0");
+        checkMeasurementNotExists(WFS11_XPATH_ENGINE, document, "station 3", "station3@mail.com");
     }
 
     @Test
@@ -300,7 +303,7 @@ public abstract class ComplexMongoDBSupport extends GeoServerSystemTestSupport {
         // check that we got the expected image back
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(getBinary(result)));
         ImageAssert.assertEquals(
-                URLs.urlToFile(getClass().getResource("/results/result1.png")), image, 10);
+                URLs.urlToFile(getClass().getResource("/results/result1.png")), image, 240);
     }
 
     @Test
@@ -419,18 +422,20 @@ public abstract class ComplexMongoDBSupport extends GeoServerSystemTestSupport {
                 mappingsContent.replaceAll("\\{collectionName\\}", STATIONS_COLLECTION_NAME);
         mappingsContent = mappingsContent.replaceAll("\\{mongoHost\\}", hostAsString);
         mappingsContent = mappingsContent.replaceAll("\\{mongoPort\\}", portAsString);
+        Path schemaPath = new File(ROOT_DIRECTORY.toFile(), "schema-store").toPath();
         mappingsContent =
-                mappingsContent.replaceAll(
-                        "\\{schemaStore\\}",
-                        new File(ROOT_DIRECTORY.toFile(), "schema-store").getAbsolutePath());
+                mappingsContent.replaceAll("\\{schemaStore\\}", schemaPath.toUri().toString());
         Files.write(APP_SCHEMA_MAPPINGS.toPath(), mappingsContent.getBytes());
         // insert stations data set in MongoDB
         File stationsFile1 = moveResourceToTempDir("/data/stations1.json", "stations1.json");
         File stationsFile2 = moveResourceToTempDir("/data/stations2.json", "stations2.json");
+        File stationsFile3 = moveResourceToTempDir("/data/stations3.json", "stations3.json");
         String stationsContent1 = new String(Files.readAllBytes(stationsFile1.toPath()));
         String stationsContent2 = new String(Files.readAllBytes(stationsFile2.toPath()));
+        String stationsContent3 = new String(Files.readAllBytes(stationsFile3.toPath()));
         insertJson(STATIONS_DATA_BASE_NAME, STATIONS_COLLECTION_NAME, stationsContent1);
         insertJson(STATIONS_DATA_BASE_NAME, STATIONS_COLLECTION_NAME, stationsContent2);
+        insertJson(STATIONS_DATA_BASE_NAME, STATIONS_COLLECTION_NAME, stationsContent3);
     }
 
     /** Load MongoDB connection properties. */
@@ -606,5 +611,26 @@ public abstract class ComplexMongoDBSupport extends GeoServerSystemTestSupport {
                         measurementUnit,
                         measurementTimestamp,
                         measurementValue));
+    }
+
+    private void checkMeasurementNotExists(
+            XpathEngine xpathEngine, Document document, String stationName, String stationMail) {
+        // check that the station metadata is correct
+        checkCount(
+                xpathEngine,
+                document,
+                1,
+                String.format(
+                        "/wfs:FeatureCollection/gml:featureMembers"
+                                + "/st:StationFeature[st:name='%s']/st:contact[st:mail='%s']",
+                        stationName, stationMail));
+        checkCount(
+                WFS11_XPATH_ENGINE,
+                document,
+                0,
+                String.format(
+                        "/wfs:FeatureCollection/gml:featureMembers"
+                                + "/st:StationFeature[st:name='%s']/st:measurement",
+                        stationName));
     }
 }

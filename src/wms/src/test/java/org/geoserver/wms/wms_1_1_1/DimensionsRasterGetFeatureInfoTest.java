@@ -16,7 +16,7 @@ import org.geoserver.catalog.DimensionDefaultValueSetting;
 import org.geoserver.catalog.DimensionDefaultValueSetting.Strategy;
 import org.geoserver.catalog.DimensionPresentation;
 import org.geoserver.catalog.ResourceInfo;
-import org.geoserver.wms.NearestMatchFinder;
+import org.geoserver.util.NearestMatchFinder;
 import org.geoserver.wms.WMSDimensionsTestSupport;
 import org.junit.Before;
 import org.junit.Test;
@@ -47,8 +47,6 @@ public class DimensionsRasterGetFeatureInfoTest extends WMSDimensionsTestSupport
      * Ensures there is at most one feature at the specified location, and returns its feature id
      *
      * @param baseFeatureInfo The GetFeatureInfo request, minus x and y
-     * @param x
-     * @param y
      * @param layerName TODO
      */
     Double getFeatureAt(String baseFeatureInfo, int x, int y, String layerName) throws Exception {

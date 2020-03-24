@@ -5,6 +5,7 @@
  */
 package org.geoserver.wcs.response;
 
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.geoserver.ows.util.ResponseUtils.buildSchemaURL;
 
 import java.util.HashMap;
@@ -184,20 +185,20 @@ public class DescribeCoverageTransformer extends TransformerBase {
         protected void handleMetadataLink(MetadataLinkInfo mdl, String linkType) {
             AttributesImpl attributes = new AttributesImpl();
 
-            if ((mdl.getAbout() != null) && (mdl.getAbout() != "")) {
+            if (isNotBlank(mdl.getAbout())) {
                 attributes.addAttribute("", "about", "about", "", mdl.getAbout());
             }
 
-            if ((mdl.getMetadataType() != null) && (mdl.getMetadataType() != "")) {
+            if (isNotBlank(mdl.getMetadataType())) {
                 attributes.addAttribute(
                         "", "metadataType", "metadataType", "", mdl.getMetadataType());
             }
 
-            if ((linkType != null) && (linkType != "")) {
+            if (isNotBlank(linkType)) {
                 attributes.addAttribute("", "xlink:type", "xlink:type", "", linkType);
             }
 
-            if ((mdl.getContent() != null) && (mdl.getContent() != "")) {
+            if (isNotBlank(mdl.getContent())) {
                 attributes.addAttribute(
                         "",
                         "xlink:href",
@@ -343,8 +344,6 @@ public class DescribeCoverageTransformer extends TransformerBase {
         /**
          * Given a set of sample dimensions, this will return a valid range only if all sample
          * dimensions have one, otherwise null
-         *
-         * @param dimensions
          */
         protected NumberRange getCoverageRange(List<CoverageDimensionInfo> dimensions) {
             NumberRange range = null;
@@ -427,12 +426,7 @@ public class DescribeCoverageTransformer extends TransformerBase {
             return "urn:ogc:def:crs:EPSG::" + code;
         }
 
-        /**
-         * Writes the element if and only if the content is not null and not empty
-         *
-         * @param elementName
-         * @param content
-         */
+        /** Writes the element if and only if the content is not null and not empty */
         protected void elementIfNotEmpty(String elementName, String content) {
             if (content != null && !"".equals(content.trim())) element(elementName, content);
         }

@@ -103,9 +103,6 @@ public class AppSchemaTestPostgisSetup extends ReferenceDataPostgisSetup {
      * Write SQL string to create tables in the test database based on the property files.
      *
      * @param propertyFiles Property files from app-schema-test suite.
-     * @throws IllegalAttributeException
-     * @throws NoSuchElementException
-     * @throws IOException
      */
     private void createTables(Map<String, File> propertyFiles)
             throws IllegalAttributeException, NoSuchElementException, IOException {
@@ -209,7 +206,7 @@ public class AppSchemaTestPostgisSetup extends ReferenceDataPostgisSetup {
                             // be supported if present.
                             Geometry geom = (Geometry) value;
                             value =
-                                    new WKTWriter(Double.isNaN(geom.getCoordinate().z) ? 2 : 3)
+                                    new WKTWriter(Double.isNaN(geom.getCoordinate().getZ()) ? 2 : 3)
                                             .write(geom);
                         }
                         if (value == null || value.toString().equalsIgnoreCase("null")) {

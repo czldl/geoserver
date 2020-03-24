@@ -139,10 +139,11 @@ public class OpenLayersPreviewPanel extends StyleEditTabPanel implements IHeader
             String legendLayout =
                     IOUtils.toString(
                             OpenLayersPreviewPanel.class.getResourceAsStream(
-                                    "style-editor-legend.xml"));
+                                    "style-editor-legend.xml"),
+                            "UTF-8");
             OutputStream os = legend.out();
             try {
-                IOUtils.write(legendLayout, os);
+                IOUtils.write(legendLayout, os, "UTF-8");
             } finally {
                 os.close();
             }
@@ -243,8 +244,6 @@ public class OpenLayersPreviewPanel extends StyleEditTabPanel implements IHeader
     /**
      * Makes sure the url does not end with "/", otherwise we would have URL lik
      * "http://localhost:8080/geoserver//wms?LAYERS=..." and Jetty 6.1 won't digest them...
-     *
-     * @param baseUrl
      */
     private String canonicUrl(String baseUrl) {
         if (baseUrl.endsWith("/")) {

@@ -5,7 +5,6 @@
 package org.geotools.renderer.lite;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import java.awt.*;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -61,11 +60,6 @@ public class VectorMapRenderUtils {
     /**
      * Creates a query selecting those features relevant to the style and extent of the given map,
      * for the given layer.
-     *
-     * @param layer
-     * @param mapContent
-     * @return
-     * @throws IOException
      */
     public static Query getStyleQuery(Layer layer, WMSMapContent mapContent) throws IOException {
 
@@ -103,8 +97,8 @@ public class VectorMapRenderUtils {
             styleQuery =
                     VectorMapRenderUtils.getStyleQuery(
                             featureSource, styleList, queryArea, screenSize, geometryDescriptor);
-        } catch (IllegalFilterException | FactoryException e1) {
-            throw Throwables.propagate(e1);
+        } catch (IllegalFilterException | FactoryException e) {
+            throw new RuntimeException(e);
         }
         // take into account the origin query (coming from cql_filter or featureid)
         Query query = DataUtilities.mixQueries(styleQuery, layer.getQuery(), null);
@@ -203,7 +197,7 @@ public class VectorMapRenderUtils {
         try {
             processRuleForQuery(styles, query);
         } catch (Exception e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e);
         }
 
         // simplify the filter
@@ -251,8 +245,6 @@ public class VectorMapRenderUtils {
      * the {@link MathTransform2D} returned here will transition from WGS84 to the requested
      * destCRS.
      *
-     * @param sourceCRS
-     * @param destCRS
      * @return the transform from {@code sourceCRS} to {@code destCRS}, will be an identity
      *     transform if the the two crs are equal
      * @throws FactoryException If no transform is available to the destCRS
@@ -302,9 +294,6 @@ public class VectorMapRenderUtils {
      * when your filters really mean you're secretly asking for all the data in which case sending
      * the filters to the Datastore actually costs you. But, databases are *much* faster at
      * processing the Filters than JAVA is and can use statistical analysis to do it.
-     *
-     * @param styles
-     * @param query
      */
     private static void processRuleForQuery(LiteFeatureTypeStyle[] styles, Query query) {
         try {
@@ -436,11 +425,6 @@ public class VectorMapRenderUtils {
     private static boolean isFeatureTypeStyleActive(FeatureType ftype, FeatureTypeStyle fts) {
         // TODO: find a complex feature equivalent for this check
         return fts.featureTypeNames().isEmpty()
-                || ((ftype.getName().getLocalPart() != null)
-                        && (ftype.getName()
-                                        .getLocalPart()
-                                        .equalsIgnoreCase(fts.getFeatureTypeName())
-                                || FeatureTypes.isDecendedFrom(
-                                        ftype, null, fts.getFeatureTypeName())));
+                || fts.featureTypeNames().stream().anyMatch(tn -> FeatureTypes.matches(ftype, tn));
     }
 }

@@ -40,6 +40,8 @@ public class DimensionInfoImpl implements DimensionInfo {
 
     Boolean nearestMatchEnabled;
 
+    Boolean rawNearestMatchEnabled;
+
     String acceptableInterval;
 
     /** The default constructor */
@@ -47,11 +49,7 @@ public class DimensionInfoImpl implements DimensionInfo {
         super();
     }
 
-    /**
-     * Creates a shallow copy of the given Dimension object
-     *
-     * @param info
-     */
+    /** Creates a shallow copy of the given Dimension object */
     public DimensionInfoImpl(DimensionInfo info) {
         super();
         this.enabled = info.isEnabled();
@@ -62,7 +60,8 @@ public class DimensionInfoImpl implements DimensionInfo {
         this.units = info.getUnits();
         this.unitSymbol = info.getUnitSymbol();
         this.defaultValue = info.getDefaultValue();
-        this.enabled = info.isEnabled();
+        this.nearestMatchEnabled = info.isNearestMatchEnabled();
+        this.rawNearestMatchEnabled = info.isRawNearestMatchEnabled();
     }
 
     public boolean isEnabled() {
@@ -130,6 +129,15 @@ public class DimensionInfoImpl implements DimensionInfo {
         this.nearestMatchEnabled = nearestMatchEnabled;
     }
 
+    public boolean isRawNearestMatchEnabled() {
+        // for backwards compatiblity we allow nearest search to be null
+        return rawNearestMatchEnabled == null ? false : rawNearestMatchEnabled;
+    }
+
+    public void setRawNearestMatchEnabled(boolean rawNearestMatchEnabled) {
+        this.rawNearestMatchEnabled = rawNearestMatchEnabled;
+    }
+
     @Override
     public String getAcceptableInterval() {
         return acceptableInterval;
@@ -151,6 +159,7 @@ public class DimensionInfoImpl implements DimensionInfo {
         sb.append(", presentation=").append(presentation);
         sb.append(", resolution=").append(resolution);
         sb.append(", nearest=").append(nearestMatchEnabled);
+        sb.append(", rawNearestMatch=").append(rawNearestMatchEnabled);
         sb.append(", acceptableInterval=").append(acceptableInterval);
         sb.append("]");
         return sb.toString();
@@ -167,8 +176,16 @@ public class DimensionInfoImpl implements DimensionInfo {
         result = prime * result + ((unitSymbol == null) ? 0 : unitSymbol.hashCode());
         result = prime * result + ((presentation == null) ? 0 : presentation.hashCode());
         result = prime * result + ((resolution == null) ? 0 : resolution.hashCode());
-        result = prime * result + ((nearestMatchEnabled == null) ? 0 : resolution.hashCode());
-        result = prime * result + ((acceptableInterval == null) ? 0 : resolution.hashCode());
+        result =
+                prime * result
+                        + ((nearestMatchEnabled == null) ? 0 : nearestMatchEnabled.hashCode());
+        result =
+                prime * result
+                        + ((rawNearestMatchEnabled == null)
+                                ? 0
+                                : rawNearestMatchEnabled.hashCode());
+        result =
+                prime * result + ((acceptableInterval == null) ? 0 : acceptableInterval.hashCode());
         return result;
     }
 
@@ -186,6 +203,7 @@ public class DimensionInfoImpl implements DimensionInfo {
                 && Objects.equals(unitSymbol, that.unitSymbol)
                 && Objects.equals(defaultValue, that.defaultValue)
                 && Objects.equals(nearestMatchEnabled, that.nearestMatchEnabled)
+                && Objects.equals(rawNearestMatchEnabled, that.rawNearestMatchEnabled)
                 && Objects.equals(acceptableInterval, that.acceptableInterval);
     }
 

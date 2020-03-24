@@ -10,6 +10,8 @@ import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -40,22 +42,27 @@ public class YsldHandler extends StyleHandler {
         try {
             TEMPLATES.put(
                     StyleType.POINT,
-                    IOUtils.toString(YsldHandler.class.getResourceAsStream("template_point.ysld")));
+                    IOUtils.toString(
+                            YsldHandler.class.getResourceAsStream("template_point.ysld"), "UTF-8"));
             TEMPLATES.put(
                     StyleType.POLYGON,
                     IOUtils.toString(
-                            YsldHandler.class.getResourceAsStream("template_polygon.ysld")));
+                            YsldHandler.class.getResourceAsStream("template_polygon.ysld"),
+                            "UTF-8"));
             TEMPLATES.put(
                     StyleType.LINE,
-                    IOUtils.toString(YsldHandler.class.getResourceAsStream("template_line.ysld")));
+                    IOUtils.toString(
+                            YsldHandler.class.getResourceAsStream("template_line.ysld"), "UTF-8"));
             TEMPLATES.put(
                     StyleType.RASTER,
                     IOUtils.toString(
-                            YsldHandler.class.getResourceAsStream("template_raster.ysld")));
+                            YsldHandler.class.getResourceAsStream("template_raster.ysld"),
+                            "UTF-8"));
             TEMPLATES.put(
                     StyleType.GENERIC,
                     IOUtils.toString(
-                            YsldHandler.class.getResourceAsStream("template_generic.ysld")));
+                            YsldHandler.class.getResourceAsStream("template_generic.ysld"),
+                            "UTF-8"));
         } catch (IOException e) {
             throw new RuntimeException("Error loading up the style templates", e);
         }
@@ -135,5 +142,15 @@ public class YsldHandler extends StyleHandler {
     @Override
     public String mimeType(Version version) {
         return MIMETYPE;
+    }
+
+    @Override
+    public boolean supportsEncoding(Version version) {
+        return true;
+    }
+
+    @Override
+    public URL getSpecification(Version version) throws MalformedURLException {
+        return new URL("https://docs.geoserver.org/latest/en/user/styling/ysld/index.html");
     }
 }

@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.logging.Logger;
 import net.sf.json.JSONException;
 import net.sf.json.util.JSONBuilder;
-import org.apache.commons.io.IOUtils;
 import org.geoserver.ows.Dispatcher;
 import org.geoserver.ows.Request;
 import org.geoserver.platform.Operation;
@@ -53,48 +52,38 @@ public class JSONDescribeLayerResponse extends DescribeLayerResponse {
     }
 
     /** Actually write the passed DescribeLayerModel on the OutputStream */
+    @SuppressWarnings("PMD.CloseResource") // just creates wrappers, actual out managed by servlet
     public void write(DescribeLayerModel layers, DescribeLayerRequest request, OutputStream output)
             throws ServiceException, IOException {
 
         switch (type) {
             case JSON:
-                OutputStreamWriter osw = null;
-                Writer outWriter = null;
-                try {
-                    osw =
-                            new OutputStreamWriter(
-                                    output, wms.getGeoServer().getSettings().getCharset());
-                    outWriter = new BufferedWriter(osw);
+                OutputStreamWriter osw =
+                        new OutputStreamWriter(
+                                output, wms.getGeoServer().getSettings().getCharset());
+                Writer outWriter = new BufferedWriter(osw);
 
-                    writeJSON(outWriter, layers);
-                } finally {
-                    IOUtils.closeQuietly(outWriter);
-                    IOUtils.closeQuietly(osw);
-                }
+                writeJSON(outWriter, layers);
+                outWriter.flush();
+                break;
             case JSONP:
                 writeJSONP(output, layers);
         }
     }
 
+    @SuppressWarnings("PMD.CloseResource") // just a wrapper, actual output managed by servlet
     private void writeJSONP(OutputStream out, DescribeLayerModel layers) throws IOException {
-
         // prepare to write out
-        OutputStreamWriter osw = null;
-        Writer outWriter = null;
-        try {
-            osw = new OutputStreamWriter(out, wms.getGeoServer().getSettings().getCharset());
-            outWriter = new BufferedWriter(osw);
+        OutputStreamWriter osw =
+                new OutputStreamWriter(out, wms.getGeoServer().getSettings().getCharset());
+        Writer outWriter = new BufferedWriter(osw);
 
-            outWriter.write(getCallbackFunction() + "(");
+        outWriter.write(getCallbackFunction() + "(");
 
-            writeJSON(outWriter, layers);
+        writeJSON(outWriter, layers);
 
-            outWriter.write(")");
-            outWriter.flush();
-        } finally {
-            IOUtils.closeQuietly(outWriter);
-            IOUtils.closeQuietly(osw);
-        }
+        outWriter.write(")");
+        outWriter.flush();
     }
 
     private void writeJSON(Writer outWriter, DescribeLayerModel description) throws IOException {

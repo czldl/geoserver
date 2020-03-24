@@ -30,8 +30,8 @@ import org.apache.commons.vfs2.AllFileSelector;
 import org.apache.commons.vfs2.FileName;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.VFS;
-import org.geoserver.data.util.IOUtils;
 import org.geoserver.importer.job.ProgressMonitor;
+import org.geoserver.util.IOUtils;
 import org.geotools.util.logging.Logging;
 
 public class Directory extends FileData {
@@ -158,54 +158,57 @@ public class Directory extends FileData {
             Set<File> all = new LinkedHashSet<File>(Arrays.asList(fileList));
 
             // scan all the files looking for spatial ones
-            for (File f : dir.listFiles()) {
-                if (f.isHidden()) {
-                    all.remove(f);
-                    continue;
-                }
-                if (f.isDirectory()) {
-                    if (!recursive && !f.equals(file)) {
-                        // skip it
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    if (f.isHidden()) {
+                        all.remove(f);
                         continue;
                     }
-                    // @hacky - ignore __MACOSX
-                    // this could probably be dealt with in a better way elsewhere
-                    // like by having Directory ignore the contents since they
-                    // are all hidden files anyway
-                    if (!"__MACOSX".equals(f.getName())) {
-                        Directory d = new Directory(f);
-                        d.prepare(m);
+                    if (f.isDirectory()) {
+                        if (!recursive && !f.equals(file)) {
+                            // skip it
+                            continue;
+                        }
+                        // @hacky - ignore __MACOSX
+                        // this could probably be dealt with in a better way elsewhere
+                        // like by having Directory ignore the contents since they
+                        // are all hidden files anyway
+                        if (!"__MACOSX".equals(f.getName())) {
+                            Directory d = new Directory(f);
+                            d.prepare(m);
 
-                        files.add(d);
+                            this.files.add(d);
+                        }
+                        // q.push(f);
+                        continue;
                     }
-                    // q.push(f);
-                    continue;
-                }
 
-                // special case for .aux files, they are metadata but get picked up as readable
-                // by the erdas imagine reader...just ignore them for now
-                if ("aux".equalsIgnoreCase(FilenameUtils.getExtension(f.getName()))) {
-                    continue;
-                }
+                    // special case for .aux files, they are metadata but get picked up as readable
+                    // by the erdas imagine reader...just ignore them for now
+                    if ("aux".equalsIgnoreCase(FilenameUtils.getExtension(f.getName()))) {
+                        continue;
+                    }
 
-                // determine if this is a spatial format or not
-                DataFormat format = DataFormat.lookup(f);
+                    // determine if this is a spatial format or not
+                    DataFormat format = DataFormat.lookup(f);
 
-                if (format != null) {
-                    SpatialFile sf = newSpatialFile(f, format);
+                    if (format != null) {
+                        SpatialFile sf = newSpatialFile(f, format);
 
-                    // gather up the related files
-                    sf.prepare(m);
+                        // gather up the related files
+                        sf.prepare(m);
 
-                    files.add(sf);
+                        this.files.add(sf);
 
-                    all.removeAll(sf.allFiles());
+                        all.removeAll(sf.allFiles());
+                    }
                 }
             }
 
             // take any left overs and add them as unspatial/unrecognized
             for (File f : all) {
-                files.add(new ASpatialFile(f));
+                this.files.add(new ASpatialFile(f));
             }
         }
 
@@ -448,28 +451,25 @@ public class Directory extends FileData {
             output = new File(archiveDir, outputName + id + ".zip");
             id++;
         }
-        ZipOutputStream zout =
-                new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(output)));
+        try (ZipOutputStream zout =
+                new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(output)))) {
 
-        // don't call zout.close in finally block, if an error occurs and the zip
-        // file is empty by chance, the second error will mask the first
-        try {
-            IOUtils.zipDirectory(file, zout, null);
-        } catch (Exception ex) {
+            // don't call zout.close in finally block, if an error occurs and the zip
+            // file is empty by chance, the second error will mask the first
             try {
-                zout.close();
-            } catch (Exception ex2) {
-                // nothing, we're totally aborting
+                IOUtils.zipDirectory(file, zout, null);
+            } catch (Exception ex) {
+                try {
+                    zout.close();
+                } catch (Exception ex2) {
+                    // nothing, we're totally aborting
+                }
+                output.delete();
+                if (ex instanceof IOException) throw (IOException) ex;
+                throw (IOException) new IOException("Error archiving").initCause(ex);
             }
-            output.delete();
-            if (ex instanceof IOException) throw (IOException) ex;
-            throw (IOException) new IOException("Error archiving").initCause(ex);
-        }
-
-        // if we get here, the zip is properly written
-        try {
-            zout.close();
         } finally {
+            // if we get here, the zip is properly written
             cleanup();
         }
     }

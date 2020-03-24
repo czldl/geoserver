@@ -6,7 +6,6 @@
 package org.geoserver.gwc.layer;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Throwables.propagate;
 
 import com.google.common.collect.ImmutableSet;
 import java.io.Serializable;
@@ -22,6 +21,7 @@ import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
+import org.geotools.util.SuppressFBWarnings;
 import org.geotools.util.logging.Logging;
 import org.geowebcache.config.XMLGridSubset;
 import org.geowebcache.filter.parameters.ParameterFilter;
@@ -62,8 +62,10 @@ public class GeoServerTileLayerInfoImpl implements Serializable, GeoServerTileLa
     private Set<String> mimeFormats;
 
     @SuppressWarnings("unused")
+    @SuppressFBWarnings("SE_BAD_FIELD")
     private List<FormatModifier> formatModifiers;
 
+    @SuppressFBWarnings("SE_BAD_FIELD")
     private Set<XMLGridSubset> gridSubsets;
 
     @SuppressWarnings("unused")
@@ -85,6 +87,7 @@ public class GeoServerTileLayerInfoImpl implements Serializable, GeoServerTileLa
      */
     private int expireCache;
 
+    @SuppressFBWarnings("SE_BAD_FIELD")
     private List<ExpirationRule> expireCacheList;
 
     private int expireClients;
@@ -162,7 +165,7 @@ public class GeoServerTileLayerInfoImpl implements Serializable, GeoServerTileLa
         try {
             clone = (GeoServerTileLayerInfoImpl) super.clone();
         } catch (CloneNotSupportedException e) {
-            throw propagate(e);
+            throw new RuntimeException(e);
         }
         clone.metaWidthHeight = metaWidthHeight.clone();
         clone.gridSubsets = nonNull((Set<XMLGridSubset>) null);
@@ -350,10 +353,7 @@ public class GeoServerTileLayerInfoImpl implements Serializable, GeoServerTileLa
                 && ((StyleParameterFilter) filter).getStyles() == null;
     }
 
-    /**
-     * @see org.geoserver.gwc.layer.GeoServerTileLayerInfo#setAutoCacheStyles(boolean)
-     * @deprecated
-     */
+    /** @see org.geoserver.gwc.layer.GeoServerTileLayerInfo#setAutoCacheStyles(boolean) */
     @Override
     public void setAutoCacheStyles(boolean autoCacheStyles) {
         if (autoCacheStyles) {

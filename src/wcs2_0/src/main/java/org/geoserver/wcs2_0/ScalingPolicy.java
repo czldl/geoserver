@@ -82,19 +82,27 @@ enum ScalingPolicy {
 
             // get scale factor
             double[] scaleFactors = getScaleFactors(scaling);
-            double scaleFactor = scaleFactors[0];
-            scaleFactor = arrangeScaleFactors(hints, new double[] {scaleFactor, scaleFactor})[0];
+            // reading the data can cause the coverage to have asymmetric pre-applied scale factors
+            // due to small numerical differences in their values, so keep both
+            scaleFactors =
+                    arrangeScaleFactors(hints, new double[] {scaleFactors[0], scaleFactors[0]});
 
             // checks
-            if (scaleFactor <= 0) {
+            if (scaleFactors[0] <= 0) {
                 throw new WCS20Exception(
                         "Invalid scale factor",
                         WCS20Exception.WCS20ExceptionCode.InvalidScaleFactor,
-                        String.valueOf(scaleFactor));
+                        String.valueOf(scaleFactors[0]));
+            }
+            if (scaleFactors[1] <= 0) {
+                throw new WCS20Exception(
+                        "Invalid scale factor",
+                        WCS20Exception.WCS20ExceptionCode.InvalidScaleFactor,
+                        String.valueOf(scaleFactors[0]));
             }
 
             // return coverage unchanged if we don't scale
-            if (scaleFactor == 1) {
+            if (scaleFactors[0] == 1 && scaleFactors[1] == 1) {
                 // NO SCALING do we need interpolation?
                 if (interpolation instanceof InterpolationNearest) {
                     return sourceGC;
@@ -129,8 +137,12 @@ enum ScalingPolicy {
                     new GridEnvelope2D(
                             0,
                             0,
-                            (int) (gridRange.getSpan(gridGeometry.gridDimensionX) * scaleFactor),
-                            (int) (gridRange.getSpan(gridGeometry.gridDimensionY) * scaleFactor)),
+                            (int)
+                                    (gridRange.getSpan(gridGeometry.gridDimensionX)
+                                            * scaleFactors[0]),
+                            (int)
+                                    (gridRange.getSpan(gridGeometry.gridDimensionY)
+                                            * scaleFactors[1])),
                     sourceGC.getRenderedImage().getSampleModel());
 
             // === scale
@@ -143,8 +155,8 @@ enum ScalingPolicy {
                             interpolation != null
                                     ? interpolation
                                     : InterpolationPolicy.getDefaultPolicy().getInterpolation());
-            parameters.parameter("xScale").setValue(scaleFactor);
-            parameters.parameter("yScale").setValue(scaleFactor);
+            parameters.parameter("xScale").setValue(scaleFactors[0]);
+            parameters.parameter("yScale").setValue(scaleFactors[1]);
             parameters.parameter("xTrans").setValue(0.0);
             parameters.parameter("yTrans").setValue(0.0);
             return (GridCoverage2D)
@@ -164,8 +176,6 @@ enum ScalingPolicy {
          * In this case we must retain the lower bounds by scale the size, hence {@link
          * ScaleDescriptor} JAI operation cannot be used. Same goes for {@link AffineDescriptor},
          * the only real option is {@link WarpDescriptor}.
-         *
-         * @param wcsinfo
          */
         @Override
         public GridCoverage2D scale(
@@ -445,9 +455,9 @@ enum ScalingPolicy {
 
             // get scale factor
             double scaleFactors[] = getScaleFactors(scaling);
+            scaleFactors = arrangeScaleFactors(hints, scaleFactors);
             double scaleFactorX = scaleFactors[0];
             double scaleFactorY = scaleFactors[1];
-            scaleFactors = arrangeScaleFactors(hints, scaleFactors);
 
             // unscale
             if (scaleFactorX == 1.0 && scaleFactorY == 1.0) {
@@ -528,11 +538,7 @@ enum ScalingPolicy {
             Hints hints,
             WCSInfo wcsinfo);
 
-    /**
-     * Retrieve the {@link ScalingPolicy} from the provided {@link ScalingType}
-     *
-     * @param scaling
-     */
+    /** Retrieve the {@link ScalingPolicy} from the provided {@link ScalingType} */
     public static ScalingPolicy getPolicy(ScalingType scaling) {
         if (scaling != null) {
             if (scaling.getScaleAxesByFactor() != null) {
@@ -556,8 +562,6 @@ enum ScalingPolicy {
      * a ScaleToSizeType type.
      *
      * <p>Throw an {@link IllegalArgumentException} in case the scaling type is not a supported one.
-     *
-     * @param scaling
      */
     public static int[] getTargetSize(ScalingType scaling) {
         if (scaling.getScaleToSize() != null) {
@@ -643,8 +647,6 @@ enum ScalingPolicy {
      * is a ScaleXXXFactor type.
      *
      * <p>Throw an {@link IllegalArgumentException} in case the scaling type is not a supported one.
-     *
-     * @param scaling
      */
     public static double[] getScaleFactors(ScalingType scaling) {
         ScalingPolicy policy = getPolicy(scaling);
@@ -652,6 +654,12 @@ enum ScalingPolicy {
             case ScaleByFactor:
                 final ScaleByFactorType scaleByFactorType = scaling.getScaleByFactor();
                 double scaleFactor = scaleByFactorType.getScaleFactor();
+                if (scaleFactor <= 0) {
+                    throw new WCS20Exception(
+                            "Invalid scale factor, needs to be a positive number",
+                            WCS20Exception.WCS20ExceptionCode.InvalidScaleFactor,
+                            Double.toString(scaleFactor));
+                }
                 return new double[] {scaleFactor, scaleFactor};
             case ScaleAxesByFactor:
                 final ScaleAxisByFactorType scaleType = scaling.getScaleAxesByFactor();
@@ -716,8 +724,6 @@ enum ScalingPolicy {
      * scaleFactor of 0.00001 and the worst overview provide you a scale factor of 0.0001, then the
      * current scaleFactor need to be adjusted by a remaining 0.1 factor.
      *
-     * @param hints
-     * @param scaleFactors
      * @return the arranged scaleFactor
      */
     private static double[] arrangeScaleFactors(Hints hints, final double[] scaleFactors) {

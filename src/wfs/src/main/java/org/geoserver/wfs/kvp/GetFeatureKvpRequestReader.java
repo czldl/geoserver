@@ -199,7 +199,7 @@ public class GetFeatureKvpRequestReader extends BaseFeatureKvpRequestReader {
                 EObject q = (EObject) query.get(0);
 
                 for (int i = 1; i < m; i++) {
-                    query.add(EMFUtils.clone(q, req.getFactory()));
+                    query.add(EMFUtils.clone(q, req.getFactory(), false));
                 }
 
                 return;
@@ -229,7 +229,11 @@ public class GetFeatureKvpRequestReader extends BaseFeatureKvpRequestReader {
             throw new WFSException(req, "Stored queries only supported in WFS 2.0+");
         }
 
-        StoredQueryProvider sqp = new StoredQueryProvider(catalog);
+        StoredQueryProvider sqp =
+                new StoredQueryProvider(
+                        catalog,
+                        getWFS(),
+                        geoServer.getGlobal().isAllowStoredQueriesPerWorkspace());
         for (URI storedQueryId : storedQueryIds) {
             StoredQuery sq = sqp.getStoredQuery(storedQueryId.toString());
             if (sq == null) {

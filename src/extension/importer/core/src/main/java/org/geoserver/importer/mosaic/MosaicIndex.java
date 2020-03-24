@@ -10,7 +10,6 @@ import com.google.common.collect.Iterators;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Date;
@@ -18,7 +17,6 @@ import java.util.HashMap;
 import java.util.Properties;
 import java.util.logging.Logger;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.io.IOUtils;
 import org.geotools.data.FeatureWriter;
 import org.geotools.data.Transaction;
 import org.geotools.data.directory.DirectoryDataStore;
@@ -56,41 +54,39 @@ public class MosaicIndex {
     }
 
     public void delete() throws IOException {
-        for (File f :
+        File[] files =
                 mosaic.getFile()
                         .listFiles(
-                                new FilenameFilter() {
-                                    @Override
-                                    public boolean accept(File dir, String name) {
-                                        if ("sample_image".equalsIgnoreCase(name)) {
-                                            return true;
-                                        }
-
-                                        if (!mosaic.getName()
-                                                .equalsIgnoreCase(
-                                                        FilenameUtils.getBaseName(name))) {
-                                            return false;
-                                        }
-
-                                        String ext = FilenameUtils.getExtension(name);
-                                        ShpFileType shpFileType = null;
-                                        if (ext != null) {
-                                            try {
-                                                shpFileType =
-                                                        ShpFileType.valueOf(ext.toUpperCase());
-                                            } catch (IllegalArgumentException iae) {
-                                                // the extension is not matching
-                                            }
-                                        }
-                                        return "properties".equalsIgnoreCase(ext)
-                                                || shpFileType != null;
+                                (dir, name) -> {
+                                    if ("sample_image".equalsIgnoreCase(name)) {
+                                        return true;
                                     }
-                                })) {
-            if (!f.delete()) {
-                // throwing exception here caused sporadic test failures on
-                // windows related to file locking but only in the cleanup
-                // method SystemTestData.tearDown
-                LOGGER.warning("unable to delete mosaic file " + f.getAbsolutePath());
+
+                                    if (!mosaic.getName()
+                                            .equalsIgnoreCase(FilenameUtils.getBaseName(name))) {
+                                        return false;
+                                    }
+
+                                    String ext = FilenameUtils.getExtension(name);
+                                    ShpFileType shpFileType = null;
+                                    if (ext != null) {
+                                        try {
+                                            shpFileType = ShpFileType.valueOf(ext.toUpperCase());
+                                        } catch (IllegalArgumentException iae) {
+                                            // the extension is not matching
+                                        }
+                                    }
+                                    return "properties".equalsIgnoreCase(ext)
+                                            || shpFileType != null;
+                                });
+        if (files != null) {
+            for (File f : files) {
+                if (!f.delete()) {
+                    // throwing exception here caused sporadic test failures on
+                    // windows related to file locking but only in the cleanup
+                    // method SystemTestData.tearDown
+                    LOGGER.warning("unable to delete mosaic file " + f.getAbsolutePath());
+                }
             }
         }
     }
@@ -139,12 +135,8 @@ public class MosaicIndex {
         indexer.put(Utils.Prop.NAME, mosaic.getName());
         indexer.put(Utils.Prop.INDEX_NAME, mosaic.getName());
         indexer.put(Utils.Prop.USE_EXISTING_SCHEMA, "true");
-        FileOutputStream ifos = null;
-        try {
-            ifos = new FileOutputStream(indexerFile);
+        try (FileOutputStream ifos = new FileOutputStream(indexerFile)) {
             indexer.store(ifos, null);
-        } finally {
-            IOUtils.closeQuietly(ifos);
         }
 
         // create a new shapefile feature store
@@ -195,19 +187,13 @@ public class MosaicIndex {
         // if we have to add the time, do so now
         if (mosaic.getTimeMode() != TimeMode.NONE) {
             File propertyFile = new File(mosaic.getFile(), mosaic.getName() + ".properties");
-            FileInputStream fis = null;
-            FileOutputStream fos = null;
-            try {
-                fis = new FileInputStream(propertyFile);
-                Properties props = new Properties();
+            Properties props = new Properties();
+            try (FileInputStream fis = new FileInputStream(propertyFile)) {
                 props.load(fis);
-                fis.close();
-                props.setProperty("TimeAttribute", "time");
-                fos = new FileOutputStream(propertyFile);
+            }
+            props.setProperty("TimeAttribute", "time");
+            try (FileOutputStream fos = new FileOutputStream(propertyFile)) {
                 props.store(fos, null);
-            } finally {
-                IOUtils.closeQuietly(fis);
-                IOUtils.closeQuietly(fos);
             }
         }
     }

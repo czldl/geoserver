@@ -5,11 +5,10 @@
  application directory.
  --><project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
-  <parent>
+    <parent>
     <groupId>org.geoserver</groupId>
     <artifactId>geoserver</artifactId>
-    <version>2.16-SNAPSHOT</version>
+    <version>2.18-SNAPSHOT</version>
   </parent>
 
   <groupId>org.geoserver</groupId>
@@ -33,10 +32,10 @@
    <plugins>
      <plugin>
       <artifactId>maven-assembly-plugin</artifactId>
-      <version>2.1</version>
+      <version>3.2.0</version>
       <configuration>
         <descriptors>
-          <descriptor>release/ext-authkey.xml</descriptor>
+          <descriptor>release/ext-arcsde.xml</descriptor>
           <!-- <descriptor>release/ext-groovy.xml</descriptor> -->
           <!-- <descriptor>release/ext-javascript.xml</descriptor> -->
           <!-- <descriptor>release/ext-spatialite.xml</descriptor> -->
@@ -45,9 +44,11 @@
           <descriptor>release/ext-wms-eo.xml</descriptor>
           <descriptor>release/ext-colormap.xml</descriptor>
           <descriptor>release/ext-mbtiles.xml</descriptor>
+          <descriptor>release/ext-mbtiles-store.xml</descriptor>
           <descriptor>release/ext-geopkg.xml</descriptor>
           <descriptor>release/ext-pgraster.xml</descriptor>
           <descriptor>release/ext-dyndimension.xml</descriptor>
+          <descriptor>release/ext-flatgeobuf.xml</descriptor>
           <!-- If you are re-enabling this, remember to re-add the documentation -->
           <!-- <descriptor>release/ext-rest-ext.xml</descriptor> -->
           <descriptor>release/ext-kmlppio.xml</descriptor>
@@ -61,6 +62,7 @@
           <!-- <descriptor>release/ext-rest-upload.xml</descriptor> -->
           <descriptor>release/ext-gwc-distributed.xml</descriptor>
           <descriptor>release/ext-gwc-s3.xml</descriptor>
+          <descriptor>release/ext-gwc-azure-blob.xml</descriptor>
           <descriptor>release/ext-gdal-wcs.xml</descriptor>
           <descriptor>release/ext-gdal-wps.xml</descriptor>
           <descriptor>release/ext-wps-jdbc.xml</descriptor>
@@ -70,7 +72,7 @@
           <descriptor>release/ext-jdbcstore.xml</descriptor>
           <descriptor>release/ext-ncwms.xml</descriptor>
           <descriptor>release/ext-gwc-sqlite.xml</descriptor> 
-	  <!--descriptor>release/ext-geogig.xml</descriptor>-->
+          <!--descriptor>release/ext-geogig.xml</descriptor>-->
           <descriptor>release/ext-oauth2-google.xml</descriptor>
           <descriptor>release/ext-oauth2-github.xml</descriptor>
           <descriptor>release/ext-oauth2-geonode.xml</descriptor>
@@ -78,25 +80,29 @@
           <descriptor>release/ext-keycloak.xml</descriptor>
           <descriptor>release/ext-backup-restore.xml</descriptor>
           <descriptor>release/ext-wmts-multi-dimensional.xml</descriptor> 
-          <descriptor>release/ext-onelogin.xml</descriptor> 
+          <descriptor>release/ext-saml.xml</descriptor>
           <descriptor>release/ext-notification.xml</descriptor>
           <descriptor>release/ext-ows-simulate.xml</descriptor> 
           <descriptor>release/ext-jdbc-metrics.xml</descriptor>
           <descriptor>release/ext-opensearch-eo.xml</descriptor>
-          <descriptor>release/ext-mbstyle.xml</descriptor> 
-          <descriptor>release/ext-status-monitoring.xml</descriptor>
           <descriptor>release/ext-nsg-wmts-profile.xml</descriptor>
           <descriptor>release/ext-nsg-wfs-profile.xml</descriptor>
           <descriptor>release/ext-taskmanager-core.xml</descriptor>
           <descriptor>release/ext-taskmanager-s3.xml</descriptor>
           <descriptor>release/ext-netcdf-ghrsst.xml</descriptor>
           <descriptor>release/ext-wfs3.xml</descriptor>
+          <descriptor>release/ext-mapml.xml</descriptor>
           <!-- <descriptor>release/ext-monitor-hibernate.xml</descriptor> -->
           <descriptor>release/ext-qos.xml</descriptor>
-          <descriptor>release/ext-web-resource.xml</descriptor>
           <descriptor>release/ext-s3-geotiff.xml</descriptor>
           <descriptor>release/ext-wmts-styles.xml</descriptor>
           <descriptor>release/ext-ogr-datastore.xml</descriptor>
+          <descriptor>release/ext-ogcapi.xml</descriptor>
+          <descriptor>release/ext-geostyler.xml</descriptor>
+          <descriptor>release/ext-csw-iso.xml</descriptor>
+          <descriptor>release/ext-importer-jdbc.xml</descriptor>
+          <descriptor>release/ext-json-ld.xml</descriptor>
+          <descriptor>release/ext-metadata.xml</descriptor>
         </descriptors>
       </configuration>
      </plugin>
@@ -132,6 +138,12 @@
 
   <!-- profiles for individual modules -->
   <profiles>
+    <profile>
+      <id>arcsde</id>
+      <modules>
+        <module>arcsde</module>
+      </modules>
+    </profile>
     <profile>
       <id>colormap</id>
       <modules> 
@@ -181,9 +193,9 @@
       </modules>
     </profile>
     <profile>
-      <id>onelogin</id>
+      <id>saml</id>
       <modules>
-        <module>onelogin</module>
+        <module>saml</module>
       </modules>
     </profile>
 	<profile>
@@ -206,19 +218,26 @@
       </modules>
     </profile>
     <profile>
+      <id>geostyler</id>
+      <modules>
+        <module>geostyler</module>
+      </modules>
+    </profile>
+    <profile>
       <id>communityRelease</id>
       <modules>
-        <module>authkey</module>
+        <module>arcsde</module>
         <module>dds</module>
         <!-- <module>spatialite</module> -->
         <module>jdbcconfig</module>
-        <!--module>script</module-->
+        <module>script</module>
         <module>wms-eo</module>
         <module>colormap</module>
         <module>mbtiles</module>
         <module>geopkg</module>
         <module>pgraster</module>
         <module>dyndimension</module>
+        <module>flatgeobuf</module>
         <!-- <module>rest-ext</module> -->
         <module>gpxppio</module>
         <module>kmlppio</module>
@@ -231,15 +250,16 @@
         <module>wps-remote</module>
         <module>wps-jdbc</module>
         <module>release</module>
-	<!--<module>geogig</module>-->
+        <!--<module>geogig</module>-->
         <module>gwc-distributed</module>
         <module>jdbcstore</module>
         <module>gdal</module>
         <module>gwc-s3</module>
+        <module>gwc-azure-blob</module>
         <module>backup-restore</module>
         <module>ncwms</module>
-        <module>web-resource</module>
         <module>gwc-sqlite</module>
+        <module>geostyler</module>
         <module>security</module>
         <module>security/oauth2-core</module>
         <module>security/oauth2-google</module>
@@ -249,23 +269,27 @@
         <module>security/keycloak</module>
         <module>wmts-multi-dimensional</module>
         <module>wmts-styles</module>
-        <module>onelogin</module>
+        <module>saml</module>
         <module>notification</module>
         <module>notification-common</module>
         <module>notification-geonode</module>
         <module>ows-simulate</module>
         <module>jdbc-metrics</module>
         <module>oseo</module>
-        <module>mbstyle</module>
         <module>s3-geotiff</module>
-        <module>status-monitoring</module>
         <module>nsg-profiles</module>
         <module>netcdf-ghrsst</module>
         <module>taskmanager</module>
         <module>wfs3</module>
         <!-- <module>monitor-hibernate</module> -->
         <module>qos</module>
+        <module>mapml</module>
         <module>web-ogr</module>
+        <module>ogcapi</module>
+        <module>metadata</module>
+        <module>csw-iso</module>
+        <module>importer-jdbc</module>
+        <module>json-ld</module>
       </modules>
     </profile>
     <profile>
@@ -278,12 +302,6 @@
       <id>sextante</id>
       <modules>
         <module>wps-sextante</module>
-      </modules>
-    </profile>
-    <profile>      
-      <id>authkey</id>
-      <modules>
-        <module>authkey</module>
       </modules>
     </profile>
     <profile>
@@ -319,7 +337,13 @@
       <modules>
         <module>wms-eo</module>
       </modules>
-    </profile>	
+    </profile>
+    <profile>
+      <id>importer-fgdb</id>
+      <modules>
+        <module>importer-fgdb</module>
+      </modules>
+    </profile>
     <profile>
       <id>geopkg</id>
       <modules>
@@ -347,6 +371,12 @@
       <modules>
         <module>dyndimension</module>
 	  </modules>
+    </profile>
+    <profile>
+      <id>flatgeobuf</id>
+      <modules>
+        <module>flatgeobuf</module>
+      </modules>
     </profile>
 	<profile>
       <id>rest-ext</id>
@@ -434,6 +464,12 @@
       <id>gwc-s3</id>
       <modules>
         <module>gwc-s3</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>gwc-azure-blob</id>
+      <modules>
+        <module>gwc-azure-blob</module>
       </modules>
     </profile>
     <profile>
@@ -556,12 +592,6 @@
       </modules>
     </profile>
     <profile>
-      <id>status-monitoring</id>
-      <modules>
-        <module>status-monitoring</module>
-      </modules>
-    </profile>
-    <profile>
       <id>nsg-wfs-profile</id>
       <modules>
         <module>nsg-profiles</module>
@@ -592,6 +622,12 @@
      </modules>
     </profile>
     <profile>
+      <id>metadata</id>
+      <modules>
+        <module>metadata</module>
+     </modules>
+    </profile>
+    <profile>
       <id>wfs3</id>
       <modules>
         <module>wfs3</module>
@@ -604,9 +640,39 @@
       </modules>
     </profile>
     <profile>
+      <id>mapml</id>
+      <modules>
+        <module>mapml</module>
+      </modules>
+    </profile>
+    <profile>
       <id>web-ogr</id>
       <modules>
         <module>web-ogr</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>ogcapi</id>
+      <modules>
+        <module>ogcapi</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>csw-iso</id>
+      <modules>
+        <module>csw-iso</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>importer-jdbc</id>
+      <modules>
+        <module>importer-jdbc</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>json-ld</id>
+      <modules>
+        <module>json-ld</module>
       </modules>
     </profile>
   </profiles>  

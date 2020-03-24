@@ -5,7 +5,12 @@
  */
 package org.geoserver.wms.map;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.StringReader;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,9 +49,8 @@ import org.geoserver.catalog.WMSLayerInfo;
 import org.geoserver.catalog.util.ReaderDimensionsAccessor;
 import org.geoserver.config.ConfigurationListenerAdapter;
 import org.geoserver.config.ServiceInfo;
-import org.geoserver.ows.HttpServletRequestAware;
+import org.geoserver.ows.Dispatcher;
 import org.geoserver.ows.KvpRequestReader;
-import org.geoserver.ows.LocalHttpServletRequest;
 import org.geoserver.ows.util.KvpUtils;
 import org.geoserver.platform.ServiceException;
 import org.geoserver.util.EntityResolverProvider;
@@ -56,6 +60,7 @@ import org.geoserver.wms.MapLayerInfo;
 import org.geoserver.wms.WMS;
 import org.geoserver.wms.WMSErrorCode;
 import org.geoserver.wms.WMSInfo;
+import org.geoserver.wms.clip.ClipWMSGetMapCallBack;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
 import org.geotools.data.DataStore;
 import org.geotools.data.simple.SimpleFeatureSource;
@@ -70,6 +75,7 @@ import org.geotools.styling.Style;
 import org.geotools.styling.StyledLayer;
 import org.geotools.styling.StyledLayerDescriptor;
 import org.geotools.styling.UserLayer;
+import org.locationtech.jts.geom.Geometry;
 import org.opengis.feature.type.FeatureType;
 import org.opengis.filter.Filter;
 import org.opengis.filter.FilterFactory;
@@ -83,8 +89,7 @@ import org.vfny.geoserver.util.SLDValidator;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.SAXException;
 
-public class GetMapKvpRequestReader extends KvpRequestReader
-        implements HttpServletRequestAware, DisposableBean {
+public class GetMapKvpRequestReader extends KvpRequestReader implements DisposableBean {
 
     private static Map<String, Integer> interpolationMethods;
 
@@ -192,18 +197,6 @@ public class GetMapKvpRequestReader extends KvpRequestReader
         }
     }
 
-    /**
-     * Implements {@link HttpServletRequestAware#setHttpRequest(HttpServletRequest)} to gather
-     * request information for some properties like {@link GetMapRequest#isGet()} and {@link
-     * GetMapRequest#getRequestCharset()}.
-     *
-     * @see
-     *     org.geoserver.ows.HttpServletRequestAware#setHttpRequest(javax.servlet.http.HttpServletRequest)
-     */
-    public void setHttpRequest(HttpServletRequest httpRequest) {
-        LocalHttpServletRequest.set(httpRequest);
-    }
-
     public void setFilterFactory(FilterFactory filterFactory) {
         this.filterFactory = filterFactory;
     }
@@ -220,7 +213,10 @@ public class GetMapKvpRequestReader extends KvpRequestReader
     @Override
     public GetMapRequest createRequest() throws Exception {
         GetMapRequest request = new GetMapRequest();
-        HttpServletRequest httpRequest = LocalHttpServletRequest.get();
+        HttpServletRequest httpRequest =
+                Optional.ofNullable(Dispatcher.REQUEST.get())
+                        .map(r -> r.getHttpRequest())
+                        .orElse(null);
         if (httpRequest != null) {
             request.setRequestCharset(httpRequest.getCharacterEncoding());
             request.setGet("GET".equalsIgnoreCase(httpRequest.getMethod()));
@@ -379,19 +375,21 @@ public class GetMapKvpRequestReader extends KvpRequestReader
             }
 
             if (getMap.getValidateSchema().booleanValue()) {
-                StringReader reader = new StringReader(getMap.getSldBody());
-                List errors = validateStyle(reader, getMap);
+                try (StringReader reader = new StringReader(getMap.getSldBody())) {
+                    List errors = validateStyle(reader, getMap);
 
-                if (errors.size() != 0) {
-                    throw new ServiceException(
-                            SLDValidator.getErrorMessage(
-                                    new StringReader(getMap.getSldBody()), errors));
+                    if (errors.size() != 0) {
+                        throw new ServiceException(
+                                SLDValidator.getErrorMessage(
+                                        new StringReader(getMap.getSldBody()), errors));
+                    }
                 }
             }
 
-            StringReader input = new StringReader(getMap.getSldBody());
-            StyledLayerDescriptor sld = parseStyle(getMap, input);
-            processSld(getMap, requestedLayerInfos, sld, styleNameList);
+            try (StringReader input = new StringReader(getMap.getSldBody())) {
+                StyledLayerDescriptor sld = parseStyle(getMap, input);
+                processSld(getMap, requestedLayerInfos, sld, styleNameList);
+            }
 
             // set filter in, we'll check consistency later
             getMap.setFilter(filters);
@@ -460,7 +458,7 @@ public class GetMapKvpRequestReader extends KvpRequestReader
 
             // ok, parse the styles parameter in isolation
             if (styleNameList.size() > 0) {
-                List<Style> parseStyles = parseStyles(styleNameList);
+                List<Style> parseStyles = parseStyles(styleNameList, requestedLayerInfos);
                 getMap.setStyles(parseStyles);
             }
 
@@ -672,6 +670,10 @@ public class GetMapKvpRequestReader extends KvpRequestReader
             throw new ServiceException("TIME and ELEVATION values cannot be both multivalued");
         }
 
+        if (rawKvp.get("clip") != null) {
+            getMap.setClip(getClipGeometry(getMap));
+        }
+
         return getMap;
     }
 
@@ -806,9 +808,6 @@ public class GetMapKvpRequestReader extends KvpRequestReader
      * Checks the various options, OGC filter, fid filter, CQL filter, and returns a list of parsed
      * filters
      *
-     * @param getMap
-     * @param rawFilters
-     * @param cqlFilters
      * @return the list of parsed filters, or null if none was found
      */
     private List<Filter> parseFilters(
@@ -988,13 +987,6 @@ public class GetMapKvpRequestReader extends KvpRequestReader
      * layers,styles
      *
      * <p>NOTE: we also handle some featuretypeconstraints
-     *
-     * @param request
-     * @param currLayer
-     * @param layer
-     * @param layers
-     * @param styles
-     * @throws IOException
      */
     public static void addStyles(
             WMS wms,
@@ -1045,11 +1037,8 @@ public class GetMapKvpRequestReader extends KvpRequestReader
     }
 
     /**
-     * @param request
-     * @param currStyleName
      * @return the configured style named <code>currStyleName</code> or <code>null</code> if such a
      *     style does not exist on this server.
-     * @throws IOException
      */
     private static Style findStyle(final WMS wms, GetMapRequest request, String currStyleName)
             throws IOException {
@@ -1082,8 +1071,6 @@ public class GetMapKvpRequestReader extends KvpRequestReader
      * @throws RuntimeException if one of the StyledLayers is neither a UserLayer nor a NamedLayer.
      *     This shuoldn't happen, since the only allowed subinterfaces of StyledLayer are NamedLayer
      *     and UserLayer.
-     * @throws ServiceException
-     * @throws IOException
      */
     private Style findStyleOf(
             GetMapRequest request, MapLayerInfo layer, String styleName, StyledLayer[] styledLayers)
@@ -1189,7 +1176,6 @@ public class GetMapKvpRequestReader extends KvpRequestReader
      *
      * @param style The style to check
      * @param mapLayerInfo The source requested.
-     * @throws ServiceException
      */
     private static void checkStyle(Style style, MapLayerInfo mapLayerInfo) throws ServiceException {
         if (mapLayerInfo.getType() == mapLayerInfo.TYPE_RASTER) {
@@ -1225,10 +1211,11 @@ public class GetMapKvpRequestReader extends KvpRequestReader
             if (attName.evaluate(type) == null) {
                 throw new ServiceException(
                         "The requested Style can not be used with this layer.  The style specifies "
-                                + "an attribute of "
+                                + "an attribute named '"
                                 + attName
-                                + " and the layer is: "
-                                + mapLayerInfo.getName());
+                                + "', not found in the '"
+                                + mapLayerInfo.getName()
+                                + "' layer");
             }
         }
     }
@@ -1417,13 +1404,26 @@ public class GetMapKvpRequestReader extends KvpRequestReader
     // return cv;
     // }
 
-    protected List<Style> parseStyles(List<String> styleNames) throws Exception {
+    protected List<Style> parseStyles(List<String> styleNames, List<Object> requestedLayerInfos)
+            throws Exception {
         List<Style> styles = new ArrayList<Style>();
-        for (String styleName : styleNames) {
+        for (int i = 0; i < styleNames.size(); i++) {
+            String styleName = styleNames.get(i);
             if ("".equals(styleName)) {
                 // return null, this should flag request reader to use default for
                 // the associated layer
                 styles.add(null);
+            } else if (isRemoteWMSLayer(requestedLayerInfos.get(i))) {
+                // GEOS-9312
+                // if the style belongs to a remote layer check inside the remote layer capabilities
+                // instead of local WMS
+                WMSLayerInfo remoteWMSLayer =
+                        (WMSLayerInfo) ((LayerInfo) requestedLayerInfos.get(i)).getResource();
+                Optional<Style> remoteStyle = remoteWMSLayer.findRemoteStyleByName(styleName);
+                if (remoteStyle.isPresent()) styles.add(remoteStyle.get());
+                else
+                    throw new ServiceException(
+                            "No such remote style: " + styleName, "StyleNotDefined");
             } else {
                 final Style style = wms.getStyleByName(styleName);
                 if (style == null) {
@@ -1453,5 +1453,32 @@ public class GetMapKvpRequestReader extends KvpRequestReader
         if (httpClient != null) {
             httpClient.close();
         }
+    }
+
+    // check if this requested layer is a cascaded WMS Layer
+    private boolean isRemoteWMSLayer(Object o) {
+        if (o == null) return false;
+        else if (!(o instanceof LayerInfo)) return false;
+        else return ((LayerInfo) o).getResource() instanceof WMSLayerInfo;
+    }
+
+    private Geometry getClipGeometry(GetMapRequest getMapRequest) {
+
+        // no raw kvp or request has no crs
+        if (getMapRequest.getRawKvp() == null || getMapRequest.getCrs() == null) return null;
+        String wktString = getMapRequest.getRawKvp().get("clip");
+        // not found
+        if (wktString == null) return null;
+        try {
+            Geometry geom = ClipWMSGetMapCallBack.readGeometry(wktString, getMapRequest.getCrs());
+
+            if (LOGGER.isLoggable(Level.FINE) && geom != null)
+                LOGGER.fine("parsed Clip param to geometry " + geom.toText());
+            return geom;
+        } catch (Exception e) {
+            LOGGER.severe("Ignoring clip param,Error parsing wkt in clip parameter : " + wktString);
+            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+        }
+        return null;
     }
 }

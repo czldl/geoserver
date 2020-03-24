@@ -179,12 +179,16 @@ public class GeoJSONBuilder extends JSONBuilder {
         // adjust the order of X and Y ordinates if needed
         if (axisOrder == CRS.AxisOrder.NORTH_EAST) {
             // encode latitude first and then longitude
-            roundedValue(y);
+            if (!Double.isNaN(y)) { // for 1d linear referencing cases
+                roundedValue(y);
+            }
             roundedValue(x);
         } else {
             // encode longitude first and then latitude
             roundedValue(x);
-            roundedValue(y);
+            if (!Double.isNaN(y)) { // for 1d linear referencing cases
+                roundedValue(y);
+            }
         }
         // if Z value is not available but we have a measure, we set Z value to zero
         z = Double.isNaN(z) && !Double.isNaN(m) ? 0 : z;
@@ -231,7 +235,6 @@ public class GeoJSONBuilder extends JSONBuilder {
      * Writes a polygon
      *
      * @param geometry The polygon to write
-     * @throws JSONException
      */
     private void writePolygon(Polygon geometry) throws JSONException {
         this.array();
@@ -382,8 +385,6 @@ public class GeoJSONBuilder extends JSONBuilder {
     /**
      * Set the axis order to assume all input will be provided in. Has no effect on geometries that
      * have already been written.
-     *
-     * @param axisOrder
      */
     public void setAxisOrder(CRS.AxisOrder axisOrder) {
         this.axisOrder = axisOrder;

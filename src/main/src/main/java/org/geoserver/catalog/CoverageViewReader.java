@@ -519,9 +519,6 @@ public class CoverageViewReader implements GridCoverage2DReader {
      * coverage view band merging we don't normally want that, e.g., raster mask bands are
      * represented as indexed but we really want to keep them in their binary, single band form. To
      * do so, the IndexColorModel is replaced by a ComponentColorModel
-     *
-     * @param coverage
-     * @return
      */
     private GridCoverage2D prepareForBandMerge(GridCoverage2D coverage) {
         RenderedImage ri = coverage.getRenderedImage();
@@ -613,11 +610,6 @@ public class CoverageViewReader implements GridCoverage2DReader {
      * Checks if a reader added a alpha channel on the fly as a result of a read parameter. We want
      * to preserve this alpha channel because the user never got a chance to select its presence in
      * the output (e.g. footprint management in mosaic)
-     *
-     * @param coverage
-     * @param reader
-     * @return
-     * @throws IOException
      */
     private boolean hasDynamicAlpha(GridCoverage2D coverage, GridCoverage2DReader reader)
             throws IOException {
@@ -772,11 +764,6 @@ public class CoverageViewReader implements GridCoverage2DReader {
     }
 
     @Override
-    public String[] listSubNames() throws IOException {
-        return delegate.listSubNames();
-    }
-
-    @Override
     public String[] getGridCoverageNames() throws IOException {
         return delegate.getGridCoverageNames();
     }
@@ -784,21 +771,6 @@ public class CoverageViewReader implements GridCoverage2DReader {
     @Override
     public int getGridCoverageCount() throws IOException {
         return delegate.getGridCoverageCount();
-    }
-
-    @Override
-    public String getCurrentSubname() throws IOException {
-        return delegate.getCurrentSubname();
-    }
-
-    @Override
-    public boolean hasMoreGridCoverages() throws IOException {
-        return delegate.hasMoreGridCoverages();
-    }
-
-    @Override
-    public void skip() throws IOException {
-        delegate.skip();
     }
 
     @Override
@@ -848,12 +820,6 @@ public class CoverageViewReader implements GridCoverage2DReader {
     }
 
     @Override
-    public int getNumOverviews(String coverageName) {
-        checkCoverageName(coverageName);
-        return delegate.getNumOverviews(referenceName);
-    }
-
-    @Override
     public ImageLayout getImageLayout() throws IOException {
         return imageLayout;
     }
@@ -888,11 +854,6 @@ public class CoverageViewReader implements GridCoverage2DReader {
     @Override
     public Set<ParameterDescriptor<List>> getDynamicParameters() throws IOException {
         return delegate.getDynamicParameters(referenceName);
-    }
-
-    @Override
-    public int getNumOverviews() {
-        return delegate.getNumOverviews(referenceName);
     }
 
     @Override

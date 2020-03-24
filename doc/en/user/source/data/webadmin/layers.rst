@@ -31,10 +31,12 @@ Layers can be divided into two types of data: raster and vector. These two forma
    * - .. image:: img/point_icon.png
      - Point
 
+.. _data_webadmin_layers_add_a_layer:
+
 Add a Layer
 -----------
 
-At the upper left-hand corner of the layers view page there are two buttons for the adding and removal of layers. 
+At the upper left-hand corner of the layers view page there are two buttons for the adding and removal of layers.
 The green plus button allows you to add a new layer. The red minus button allows you to remove selected layers.
 
 .. figure:: img/data_layers_add_remove.png
@@ -118,7 +120,7 @@ A coordinate reference system (CRS) defines how georeferenced spatial data relat
 * **Native SRS**—Specifies the coordinate system the layer is stored in. Clicking the projection link displays a description of the SRS.
 * **Declared SRS**—Specifies the coordinate system GeoServer publishes to clients
 * **SRS Handling**—Determines how GeoServer should handle projection when the two SRSes differ. Possible values are:
-  
+
   * **Force declared** (default): the declared SRS is forced upon the data, overwriting the native one. This is the default option and normally the best course of action,
     the declared code comes from the EPSG database and has a wealth of extra information in it, starting from a valid EPSG code, an area of validity, a link back in the
     database to find the best transformation steps to other coordinate reference systems should reprojection be required. Use this option when the source has no
@@ -128,12 +130,16 @@ A coordinate reference system (CRS) defines how georeferenced spatial data relat
     CRS is requested, the reprojection will go directly from native to declared)
   * **Keep native**: this is a setting that should be used in very rare cases. Keeping native means using the declared one in the capabilities documents, but then
     using the native CRS in all othe requests (with no reprojection in between, unless explicitly requested from client). This is particularly problematic if the source
-    is a shapefile, as the PRJ files lack all the extra information provided by the EPSG database (it will for example break WFS 1.1 and 2.0 SRS declarations in GML output). 
-    The setting meant to be used in cases where WMS is the primary target, and the native and declared CRSs have very small differences, avoiding on the fly reprojection 
+    is a shapefile, as the PRJ files lack all the extra information provided by the EPSG database (it will for example break WFS 1.1 and 2.0 SRS declarations in GML output).
+    The setting meant to be used in cases where WMS is the primary target, and the native and declared CRSs have very small differences, avoiding on the fly reprojection
     and datum change.
-    
+
 In summary, use **Force Declared** as your primary option, **Reproject from native** only if your source data does not match any EPSG code, and **Keep Native**
 only if you really know what you're doing.
+
+For WMS Server and WFS-NG layers with multiple supported CRS in capability document, the Native CRS can be selected from clicking Find button next to Native SRS field
+
+.. figure:: img/cascade_srs.png
 
 Bounding Boxes
 ^^^^^^^^^^^^^^
@@ -216,6 +222,22 @@ Cache parameters that apply to the HTTP response from client requests.
 
 * **Response Cache Headers**— If selected, GeoServer will not request the same tile twice within the time specified in :guilabel:`Cache Time`. One hour measured in seconds (3600), is the default value for :guilabel:`Cache Time`.
 
+Root Layer in Capabilities
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+Capabilities documents in GeoServer always have a top level (root) Layer element that works as a container of all the available layers and groups.
+
+When a layer is the only top level element in the Capabilities document, it is possible to remove this root Layer and return
+a hierarchy where the layer is the root instead.
+
+To enable this functionality, choose the **No** option from the Root Layer in Capabilities section.
+
+By default this behaviour is inherited from the global WMS service settings (**WMS Global Settings** option).
+Finally, it is possible to override the service settings and force a **Yes** to always include the GeoServer root element.
+ 
+.. figure:: img/data_layers_root_in_capabilities.png
+  
+   Layer root layer in capabilities options
+
 Services Settings
 ^^^^^^^^^^^^^^^^^
 
@@ -286,7 +308,7 @@ Sets the WFS specific publishing parameters.
 
      The list will be used only for the capabilities document generation, but will not be used to limit the actual target SRS usage in GetFeature requests.
 
-* **Encode coordinates measures**—Checking this setting will cause coordinates measures ("M") to be encoded in WFS output formats that support measures. The default (not checked) is to not encode coordinates measures.  
+* **Encode coordinates measures**—Checking this setting will cause coordinates measures ("M") to be encoded in WFS output formats that support measures. The default (not checked) is to not encode coordinates measures.
 
 WCS Settings
 ^^^^^^^^^^^^
@@ -336,15 +358,55 @@ For each enabled dimension the following configuration options are available:
 
 * **Reference value**—The default value specifier. Only shown for the default value strategies where its used.
 * **Nearest match**—Whether to enable, or not, WMS nearest match support on this dimension. Currently supported only on the time dimension.
-* **Acceptable interval**—A maximum search distance from the specified value (available only when nearest match is enabled). 
-  Can be empty (no limit), a single value (symmetric search) or using a ``before/after`` syntax to 
+* **Nearest match on raw data**—Whether to enable, or not, nearest match support on this dimension for raw data requests (WCS for coverage layers, WFS for feature layers). Currently supported only on the time dimension for WCS service.
+* **Acceptable interval**—A maximum search distance from the specified value (available only when nearest match is enabled).
+  Can be empty (no limit), a single value (symmetric search) or using a ``before/after`` syntax to
   specify an asymmetric search range. Time distances should specified using the ISO period syntax. For example, ``PT1H/PT0H`` allows to search up to one hour before the user specified value,
   but not after.
 
 For time dimension the value must be in ISO 8601 DateTime format ``yyyy-MM-ddThh:mm:ss.SSSZ`` For elevation dimension, the value must be and integer of floating point number.
 
-Only for the "Reference value" strategy, it is also possible to use ranges or times and ranges of elevation, in the form ``fromValue/toValue``. 
+Only for the "Reference value" strategy, it is also possible to use ranges or times and ranges of elevation, in the form ``fromValue/toValue``.
 Only for the "Reference value" strategy, and limited to times, it's also possible to use relative times like ``P1M/PRESENT``, but caution is given that the reference value
 is copied verbatim into the capabilities document, and as a result, not all client might be recognizing that syntax.
 
 .. note:: For more information on specifying times, please see the section on :ref:`wms_time`.
+
+Vector Custom Dimensions
+^^^^^^^^^^^^^^^^^^^^^^^^
+GeoServer also supports adding custom dimensions to vector layers, defining their names and configurations. 
+
+.. figure:: img/data_layers_dimension_editor_custom.png
+
+   Custom dimension enabled for a vector layer
+
+For each enabled dimension the following configuration options are available:
+
+* **Name**—Custom dimension name.
+* **Attribute**—Attribute name for picking the value for this dimension (vector only). This is treated at start of the range if **End attribute** is also given.
+* **End attribute**—Attribute name for picking the end of the value range for this dimension (optional, vector only).
+* **Presentation**—The presentation type for the available values in the capabilities document. Either *each value separately (list)*, *interval and resolution*, or *continuous interval*.
+* **Default value**—Default value to use for this dimension if none is provided with the request. Select one of from four strategies:
+
+  * **smallest domain value**—Uses the smallest available value from the data
+  * **biggest domain value**—Uses the biggest available value from the data
+  * **nearest to the reference value**—Selects the data value closest to the given reference value
+  * **reference value**—Tries to use the given reference value as-is, regardless of whether its actually available in the data or not.
+
+* **Reference value**—The default value specifier. Only shown for the default value strategies where its used.
+* **Nearest match**—Whether to enable, or not, WMS nearest match support on this dimension.
+* **Acceptable interval**—A maximum search distance from the specified value (available only when nearest match is enabled).
+  Can be empty (no limit), a single value (symmetric search) or using a ``before/after`` syntax to
+  specify an asymmetric search range.
+
+Edit Layer: Security
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note:: For more information on data access rules, please see the section on :ref:`security_webadmin_data`.
+
+Sets data access rules at layer level.
+
+.. figure:: img/data_layers_security_editor.png
+
+To create/edit layer's data access rules simply check/uncheck checkboxes according to desidered access mode and role. 
+The Grant access to any role checkboxe grant each role for each access mode.

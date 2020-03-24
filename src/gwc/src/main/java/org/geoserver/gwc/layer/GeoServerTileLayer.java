@@ -7,14 +7,14 @@ package org.geoserver.gwc.layer;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.common.base.Throwables.propagate;
+import static com.google.common.base.Throwables.throwIfUnchecked;
 import static org.geoserver.gwc.GWC.tileLayerName;
 import static org.geoserver.ows.util.ResponseUtils.buildURL;
 import static org.geoserver.ows.util.ResponseUtils.params;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
-import java.awt.*;
+import java.awt.Dimension;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.http.Cookie;
@@ -49,7 +50,6 @@ import org.geoserver.ows.Dispatcher;
 import org.geoserver.ows.LocalWorkspace;
 import org.geoserver.ows.Request;
 import org.geoserver.ows.URLMangler;
-import org.geoserver.ows.util.RequestUtils;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.rest.RequestInfo;
 import org.geoserver.wms.GetLegendGraphicRequest;
@@ -116,7 +116,17 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
 
     private String configErrorMessage;
 
-    private Map<String, GridSubset> subSets;
+    /**
+     * Lazily and atomically initialized mapping of {@link GridSubset#getName() name} to {@link
+     * GridSubset}.
+     *
+     * <p>Not to be used directly but through {@link #gridSubsets()} for querying. The map is not
+     * synchronized nor a {@code ConcurrentMap}. The reference held by this variable is reset to
+     * null instead on mutating operations such as {@link #addGridSubset} and {@link
+     * #removeGridSubset} for it to be re-computed from the corresponding {@link
+     * GeoServerTileLayerInfo} when needed.
+     */
+    private final AtomicReference<Map<String, GridSubset>> _subSets;
 
     private static LayerListenerList listeners = new LayerListenerList();
 
@@ -124,9 +134,19 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
 
     private Catalog catalog;
 
-    private String publishedId;
+    /**
+     * The {@link Catalog}'s {@link LayerInfo} or {@link LayerGroupInfo} id, when created through a
+     * constructor that receives the id instead of the {@link PublishedInfo} instance itself. See
+     * {@link #getPublishedInfo()}
+     */
+    private final String publishedInfoId;
 
-    private volatile PublishedInfo publishedInfo;
+    /**
+     * Atomic reference to the {@link PublishedInfo} this tile layer references. Either assigned
+     * directly at a constructor that receives the {@code PublishedInfo}, or computed lazily and
+     * atomically from the {@code PublishedInfo} id held at {@link #publishedInfoId}
+     */
+    private final AtomicReference<PublishedInfo> _publishedInfo;
 
     private LegendSample legendSample;
 
@@ -141,8 +161,10 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         checkNotNull(configDefaults, "configDefaults");
 
         this.gridSetBroker = gridsets;
-        this.publishedInfo = publishedInfo;
+        this._publishedInfo = new AtomicReference<>(publishedInfo);
+        this.publishedInfoId = publishedInfo.getId();
         this.info = TileLayerInfoUtil.loadOrCreate(getPublishedInfo(), configDefaults);
+        this._subSets = new AtomicReference<>();
     }
 
     public GeoServerTileLayer(
@@ -154,41 +176,40 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         checkNotNull(state, "state");
 
         this.gridSetBroker = gridsets;
-        this.publishedInfo = publishedInfo;
+        this._publishedInfo = new AtomicReference<>(publishedInfo);
+        this.publishedInfoId = publishedInfo.getId();
         this.info = state;
+        this._subSets = new AtomicReference<>();
         TileLayerInfoUtil.checkAutomaticStyles(publishedInfo, state);
     }
 
     public GeoServerTileLayer(
             final Catalog catalog,
             final String publishedId,
-            final GWCConfig configDefaults,
-            final GridSetBroker gridsets) {
-        checkNotNull(catalog, "catalog");
-        checkNotNull(publishedId, "publishedId");
-        checkNotNull(gridsets, "gridsets");
-        checkNotNull(configDefaults, "configDefaults");
-
-        this.gridSetBroker = gridsets;
-        this.catalog = catalog;
-        this.publishedId = publishedId;
-        this.info = TileLayerInfoUtil.loadOrCreate(getPublishedInfo(), configDefaults);
-    }
-
-    public GeoServerTileLayer(
-            final Catalog catalog,
-            final String publishedId,
-            final GridSetBroker gridsets,
+            final GridSetBroker gridsetBroker,
             final GeoServerTileLayerInfo state) {
         checkNotNull(catalog, "catalog");
         checkNotNull(publishedId, "publishedId");
-        checkNotNull(gridsets, "gridsets");
+        checkNotNull(gridsetBroker, "gridsets");
         checkNotNull(state, "state");
 
-        this.gridSetBroker = gridsets;
+        this.gridSetBroker = gridsetBroker;
         this.catalog = catalog;
-        this.publishedId = publishedId;
+        this.publishedInfoId = publishedId;
+        this._publishedInfo = new AtomicReference<>();
         this.info = state;
+        this._subSets = new AtomicReference<>();
+    }
+
+    protected GeoServerTileLayer(final GeoServerTileLayer layer) {
+        this.gridSetBroker = layer.gridSetBroker;
+        this.catalog = layer.catalog;
+        this.publishedInfoId = layer.publishedInfoId;
+        this._publishedInfo = new AtomicReference<>();
+        this.info = layer.info;
+        this._subSets = new AtomicReference<>();
+        this.legendSample = layer.legendSample;
+        this.wms = layer.wms;
     }
 
     @Override
@@ -209,12 +230,17 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         if (gwcOperation != null && gwcOperation.equalsIgnoreCase("GetCapabilities")) {
             // this is a get capabilities request, we need to check if we are in the context of
             // virtual service
-            return getNoPrefixedNameIfVirtualService();
+            return getContextualName();
         }
         return info.getName();
     }
 
-    private String getNoPrefixedNameIfVirtualService() {
+    /**
+     * Returns the local name if in a workspace specific service, full name otherwise. It's not done
+     * fully automatically in getName because it would break tile lookups in blob stores (getName
+     * limits this behavior to the GetCapabilities request)
+     */
+    public String getContextualName() {
         // let's see if this a virtual service request
         WorkspaceInfo localWorkspace = LocalWorkspace.get();
         if (localWorkspace != null) {
@@ -278,9 +304,9 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
             return false;
         }
         boolean geoserverLayerEnabled;
-        LayerInfo layerInfo = getLayerInfo();
-        if (layerInfo != null) {
-            geoserverLayerEnabled = layerInfo.enabled();
+        PublishedInfo published = getPublishedInfo();
+        if (published instanceof LayerInfo) {
+            geoserverLayerEnabled = ((LayerInfo) published).enabled();
         } else {
             // LayerGroupInfo has no enabled property, so assume true
             geoserverLayerEnabled = true;
@@ -314,8 +340,9 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         }
 
         ReferencedEnvelope latLongBbox;
-        if (getLayerInfo() == null) {
-            LayerGroupInfo groupInfo = getLayerGroupInfo();
+        final PublishedInfo publishedInfo = getPublishedInfo();
+        if (publishedInfo instanceof LayerGroupInfo) {
+            LayerGroupInfo groupInfo = (LayerGroupInfo) publishedInfo;
             try {
                 ReferencedEnvelope bounds = groupInfo.getBounds();
                 boolean lenient = true;
@@ -346,64 +373,48 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
     }
 
     /**
-     * @return the {@link LayerInfo} for this layer, or {@code null} if it's backed by a {@link
-     *     LayerGroupInfo} instead
-     * @deprecated use getPublishedInfo instead
+     * @return the {@link LayerInfo} or {@link LayerGroupInfo} this tile layer is associated with
+     * @throws IllegalStateException if this {@code GeoServerTileLayer} was created with a {@link
+     *     PublishedInfo} id but such object does not exist in the {@link Catalog}
+     * @implNote The returned {@link PublishedInfo} is either assigned at construction time, or
+     *     lazily obtained from the catalog here in a thread contention free way
      */
-    @Deprecated
-    public LayerInfo getLayerInfo() {
-        PublishedInfo info = getPublishedInfo();
-        if (info instanceof LayerInfo) {
-            return (LayerInfo) info;
-        }
-
-        return null;
-    }
-
     public PublishedInfo getPublishedInfo() {
+        PublishedInfo publishedInfo = this._publishedInfo.get();
         if (publishedInfo == null) {
-            synchronized (this) {
-                if (publishedInfo == null) {
-                    // see if it's a layer or a layer group
-                    PublishedInfo work = catalog.getLayer(publishedId);
-                    if (work == null) {
-                        work = catalog.getLayerGroup(publishedId);
-                    }
-
-                    if (work != null) {
-                        TileLayerInfoUtil.checkAutomaticStyles(work, info);
-                    } else {
-                        throw new IllegalStateException(
-                                "Could not locate a layer or layer group with id "
-                                        + publishedId
-                                        + " within GeoServer configuration, the GWC configuration seems to be out of synch");
-                    }
-                    this.publishedInfo = work;
-                }
-            }
+            publishedInfo =
+                    this._publishedInfo.accumulateAndGet(
+                            null,
+                            (currVal, nullUpdateVal) -> {
+                                if (currVal == null) {
+                                    // see if it's a layer or a layer group
+                                    PublishedInfo catalogLayer = catalog.getLayer(publishedInfoId);
+                                    if (catalogLayer == null) {
+                                        catalogLayer = catalog.getLayerGroup(publishedInfoId);
+                                    }
+                                    if (catalogLayer == null) {
+                                        throw new IllegalStateException(
+                                                "Could not locate a layer or layer group with id "
+                                                        + publishedInfoId
+                                                        + " within GeoServer configuration, the GWC configuration seems to be out of synch");
+                                    } else {
+                                        TileLayerInfoUtil.checkAutomaticStyles(catalogLayer, info);
+                                    }
+                                    return catalogLayer;
+                                }
+                                // returning null when the current value is not null, prevents
+                                // accumulateAndGet from replacing the current reference
+                                return null;
+                            });
         }
-
         return publishedInfo;
     }
 
-    /**
-     * @return the {@link LayerGroupInfo} for this layer, or {@code null} if it's backed by a {@link
-     *     LayerInfo} instead
-     * @deprecated use getPublishedInfo instead
-     */
-    @Deprecated
-    public LayerGroupInfo getLayerGroupInfo() {
-        PublishedInfo info = getPublishedInfo();
-        if (info instanceof LayerGroupInfo) {
-            return (LayerGroupInfo) info;
-        }
-
-        return null;
-    }
-
     private ResourceInfo getResourceInfo() {
-        LayerInfo layerInfo = getLayerInfo();
-        return layerInfo == null ? null : layerInfo.getResource();
+        PublishedInfo publishedInfo = getPublishedInfo();
+        return publishedInfo instanceof LayerInfo
+                ? ((LayerInfo) publishedInfo).getResource()
+                : null;
     }
 
     /**
@@ -420,7 +431,11 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         List<String> keywords = Collections.emptyList();
         List<ContactInformation> contacts = Collections.emptyList();
 
-        ResourceInfo resourceInfo = getResourceInfo();
+        PublishedInfo publishedInfo = getPublishedInfo();
+        ResourceInfo resourceInfo =
+                publishedInfo instanceof LayerInfo
+                        ? ((LayerInfo) publishedInfo).getResource()
+                        : null;
         if (resourceInfo != null) {
             title = resourceInfo.getTitle();
             description = resourceInfo.getAbstract();
@@ -429,15 +444,13 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
                 keywords.add(kw.getValue());
             }
         } else {
-            LayerGroupInfo lg = getLayerGroupInfo();
-            if (lg != null) {
-                if (lg != null) {
-                    if (lg.getTitle() != null) {
-                        title = lg.getTitle();
-                    }
-                    if (lg.getAbstract() != null) {
-                        description = lg.getAbstract();
-                    }
+            if (publishedInfo instanceof LayerGroupInfo) {
+                LayerGroupInfo lg = (LayerGroupInfo) publishedInfo;
+                if (lg.getTitle() != null) {
+                    title = lg.getTitle();
+                }
+                if (lg.getAbstract() != null) {
+                    description = lg.getAbstract();
                 }
             }
         }
@@ -458,12 +471,12 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
      */
     @Override
     public String getStyles() {
-        LayerGroupInfo layerGroupInfo = getLayerGroupInfo();
-        if (layerGroupInfo != null) {
+        PublishedInfo published = getPublishedInfo();
+        if (!(published instanceof LayerInfo)) {
             // there's no such thing as default style for a layer group
             return null;
         }
-        LayerInfo layerInfo = getLayerInfo();
+        LayerInfo layerInfo = (LayerInfo) published;
         StyleInfo defaultStyle = layerInfo.getDefaultStyle();
         if (defaultStyle == null) {
             setConfigErrorMessage("Underlying GeoSever Layer has no default style");
@@ -600,7 +613,7 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         }
     }
 
-    private ConveyorTile getMetatilingReponse(
+    protected ConveyorTile getMetatilingReponse(
             ConveyorTile tile, final boolean tryCache, final int metaX, final int metaY)
             throws GeoWebCacheException, IOException {
 
@@ -640,7 +653,7 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
                     metaTile.setWebMap(map);
                     saveTiles(metaTile, tile, requestTime);
                 } catch (Exception e) {
-                    Throwables.propagateIfInstanceOf(e, GeoWebCacheException.class);
+                    Throwables.throwIfInstanceOf(e, GeoWebCacheException.class);
                     throw new GeoWebCacheException("Problem communicating with GeoServer", e);
                 }
             }
@@ -841,34 +854,44 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
 
     /** @see org.geowebcache.layer.TileLayer#getGridSubsets() */
     @Override
-    public synchronized Set<String> getGridSubsets() {
-        checkGridSubsets();
-        return new HashSet<String>(subSets.keySet());
+    public Set<String> getGridSubsets() {
+        return new HashSet<String>(gridSubsets().keySet());
     }
 
     @Override
     public GridSubset getGridSubset(final String gridSetId) {
-        checkGridSubsets();
-        return subSets.get(gridSetId);
+        return gridSubsets().get(gridSetId);
     }
 
-    private synchronized void checkGridSubsets() {
-        if (this.subSets == null) {
-            ReferencedEnvelope latLongBbox = getLatLonBbox();
-            try {
-                this.subSets = getGrids(latLongBbox, gridSetBroker);
-            } catch (ConfigurationException e) {
-                String msg = "Can't create grids for '" + getName() + "': " + e.getMessage();
-                LOGGER.log(Level.WARNING, msg, e);
-                setConfigErrorMessage(msg);
-            }
+    /**
+     * Returns the cached grid subsets from {@link #_subSets} if present, or atomically computes it
+     * and returns the cached reference.
+     */
+    private Map<String, GridSubset> gridSubsets() {
+        Map<String, GridSubset> gridSubsets = this._subSets.get();
+        // compute the grid subsets atomically without thread contention
+        while (gridSubsets == null) {
+            // pass null as the update value (first arg) so it's lazly computed inside the
+            // function only if needed
+            gridSubsets =
+                    this._subSets.accumulateAndGet(
+                            null,
+                            (currValue, nullNewValue) -> {
+                                if (currValue == null) {
+                                    return computeGridSubsets();
+                                }
+                                // returning null when the current value is not null, prevents
+                                // accumulateAndGet from replacing the current reference
+                                return null;
+                            });
         }
+        return gridSubsets;
     }
 
     @Override
-    public synchronized GridSubset removeGridSubset(String gridSetId) {
-        checkGridSubsets();
-        final GridSubset oldValue = this.subSets.remove(gridSetId);
+    public GridSubset removeGridSubset(String gridSetId) {
+        gridSubsets();
+        final GridSubset oldValue = gridSubsets().remove(gridSetId);
 
         Set<XMLGridSubset> gridSubsets = new HashSet<XMLGridSubset>(info.getGridSubsets());
         for (Iterator<XMLGridSubset> it = gridSubsets.iterator(); it.hasNext(); ) {
@@ -878,6 +901,8 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
             }
         }
         info.setGridSubsets(gridSubsets);
+        // reset lazy value
+        this._subSets.set(null);
         return oldValue;
     }
 
@@ -890,7 +915,24 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         Set<XMLGridSubset> gridSubsets = new HashSet<XMLGridSubset>(info.getGridSubsets());
         gridSubsets.add(gridSubsetInfo);
         info.setGridSubsets(gridSubsets);
-        this.subSets = null;
+        // reset lazy value
+        this._subSets.set(null);
+    }
+
+    /**
+     * Actually computes the layer's {@link GridSubset}s. This method is intended as a helper for
+     * {@link #gridSubsets()} to compute the mappings atomically in a lock-free way
+     */
+    private Map<String, GridSubset> computeGridSubsets() {
+        ReferencedEnvelope latLongBbox = getLatLonBbox();
+        try {
+            return getGrids(latLongBbox, gridSetBroker);
+        } catch (ConfigurationException e) {
+            String msg = "Can't create grids for '" + getName() + "': " + e.getMessage();
+            LOGGER.log(Level.WARNING, msg, e);
+            setConfigErrorMessage(msg);
+            throw new IllegalStateException(e);
+        }
     }
 
     private Map<String, GridSubset> getGrids(
@@ -967,20 +1009,22 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
             targetCrs = CRS.decode(epsgCode, longitudeFirst);
             checkNotNull(targetCrs);
         } catch (Exception e) {
-            throw propagate(e);
+            throwIfUnchecked(e);
+            throw new RuntimeException(e);
         }
 
         ReferencedEnvelope nativeBounds;
-        if (getLayerInfo() != null) {
+        final ResourceInfo resourceInfo = getResourceInfo();
+        if (resourceInfo != null) {
             // projection policy for these bounds are already taken care of by the geoserver
             // configuration
             try {
-                nativeBounds = getLayerInfo().getResource().boundingBox();
+                nativeBounds = resourceInfo.boundingBox();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         } else {
-            nativeBounds = getLayerGroupInfo().getBounds();
+            nativeBounds = ((LayerGroupInfo) getPublishedInfo()).getBounds();
         }
         checkState(nativeBounds != null, getName(), " has no native bounds set");
 
@@ -1021,7 +1065,8 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
                 // transform covered area in native crs to target crs
                 transformedBounds = clipped.transform(targetCrs, true, ENV_TX_POINTS);
             } catch (Exception e1) {
-                throw propagate(e1);
+                throwIfUnchecked(e);
+                throw new RuntimeException(e);
             }
         }
 
@@ -1078,10 +1123,7 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         return true;
     }
 
-    /**
-     * @throws UnsupportedOperationException
-     * @see org.geowebcache.layer.TileLayer#setCacheBypassAllowed(boolean)
-     */
+    /** @see org.geowebcache.layer.TileLayer#setCacheBypassAllowed(boolean) */
     @Override
     public void setCacheBypassAllowed(boolean allowed) {
         throw new UnsupportedOperationException();
@@ -1096,10 +1138,7 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         return Integer.valueOf(0);
     }
 
-    /**
-     * @throws UnsupportedOperationException
-     * @see org.geowebcache.layer.TileLayer#setBackendTimeout(int)
-     */
+    /** @see org.geowebcache.layer.TileLayer#setBackendTimeout(int) */
     @Override
     public void setBackendTimeout(int seconds) {
         throw new UnsupportedOperationException();
@@ -1135,11 +1174,11 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
             return info.getExpireClients();
         }
 
-        LayerInfo layerInfo = getLayerInfo();
-        if (layerInfo != null) {
-            return getLayerMaxAge(layerInfo);
+        PublishedInfo published = getPublishedInfo();
+        if (published instanceof LayerInfo) {
+            return getLayerMaxAge((LayerInfo) published);
         }
-        LayerGroupInfo layerGroupInfo = getLayerGroupInfo();
+        LayerGroupInfo layerGroupInfo = (LayerGroupInfo) published;
         if (layerGroupInfo != null) {
             return getGroupMaxAge(layerGroupInfo);
         } else {
@@ -1153,11 +1192,7 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         }
     }
 
-    /**
-     * Returns the max age of a layer group by looking for the minimum max age of its components
-     *
-     * @param lg
-     */
+    /** Returns the max age of a layer group by looking for the minimum max age of its components */
     private int getGroupMaxAge(LayerGroupInfo lg) {
         int maxAge = Integer.MAX_VALUE;
         for (PublishedInfo pi : lg.getLayers()) {
@@ -1285,15 +1320,15 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
     public List<MetadataURL> getMetadataURLs() {
         List<MetadataLinkInfo> gsMetadataLinks;
         List<MetadataURL> gwcMetadataLinks = new ArrayList<>();
-        LayerInfo layerInfo = getLayerInfo();
-        if (layerInfo != null) {
+        PublishedInfo published = getPublishedInfo();
+        if (published instanceof LayerInfo) {
             // this is a normal layer
-            gsMetadataLinks = layerInfo.getResource().getMetadataLinks();
+            gsMetadataLinks = ((LayerInfo) published).getResource().getMetadataLinks();
         } else {
             // this is a layer group
             gsMetadataLinks = new ArrayList<>();
             for (LayerInfo layer :
-                    Iterables.filter(getLayerGroupInfo().getLayers(), LayerInfo.class)) {
+                    Iterables.filter(((LayerGroupInfo) published).getLayers(), LayerInfo.class)) {
                 // getting metadata of all layers of the layer group
                 List<MetadataLinkInfo> metadataLinksLayer = layer.getResource().getMetadataLinks();
                 if (metadataLinksLayer != null) {
@@ -1340,11 +1375,12 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
 
     @Override
     public Map<String, org.geowebcache.config.legends.LegendInfo> getLayerLegendsInfo() {
-        LayerInfo layerInfo = getLayerInfo();
-        if (layerInfo == null) {
+        final PublishedInfo publishedInfo = getPublishedInfo();
+        if (!(publishedInfo instanceof LayerInfo)) {
             return Collections.emptyMap();
         }
         Map<String, org.geowebcache.config.legends.LegendInfo> legends = new HashMap<>();
+        LayerInfo layerInfo = (LayerInfo) publishedInfo;
         Set<StyleInfo> styles = new HashSet<>(layerInfo.getStyles());
         styles.add(layerInfo.getDefaultStyle());
         for (StyleInfo styleInfo : styles) {
@@ -1477,7 +1513,8 @@ public class GeoServerTileLayer extends TileLayer implements ProxyLayer {
         Request owsRequest = Dispatcher.REQUEST.get();
         if (owsRequest != null) {
             // retrieve the base URL from the dispatcher request
-            return RequestUtils.baseURL(Dispatcher.REQUEST.get().getHttpRequest());
+            return org.geoserver.ows.util.ResponseUtils.baseURL(
+                    Dispatcher.REQUEST.get().getHttpRequest());
         }
         // let's see if a REST end-point was targeted
         RequestInfo restRequest = RequestInfo.get();

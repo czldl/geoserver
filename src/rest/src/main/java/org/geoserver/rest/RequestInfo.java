@@ -38,11 +38,7 @@ public class RequestInfo {
     /** Constructs an empty {@link RequestInfo} object */
     public RequestInfo() {}
 
-    /**
-     * Constructs a {@link RequestInfo} object, generating content based on the passed request.
-     *
-     * @param request
-     */
+    /** Constructs a {@link RequestInfo} object, generating content based on the passed request. */
     public RequestInfo(HttpServletRequest request) {
         // http://host:port/appName
         baseURL =
@@ -126,28 +122,25 @@ public class RequestInfo {
         return ResponseUtils.buildURL(baseURL, path, null, URLMangler.URLType.SERVICE);
     }
 
-    /**
-     * Returns the RequestInfo from the current {@link RequestContextHolder}
-     *
-     * @return
-     */
+    /** Returns the RequestInfo from the current {@link RequestContextHolder} */
     public static RequestInfo get() {
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes == null) return null;
         return (RequestInfo)
-                RequestContextHolder.getRequestAttributes()
-                        .getAttribute(RequestInfo.KEY, RequestAttributes.SCOPE_REQUEST);
+                requestAttributes.getAttribute(RequestInfo.KEY, RequestAttributes.SCOPE_REQUEST);
     }
 
     public Map<String, String[]> getQueryMap() {
         return queryMap;
     }
 
-    /**
-     * Sets the provided RequestInfo into the {@link RequestContextHolder}
-     *
-     * @param requestInfo
-     */
+    /** Sets the provided RequestInfo into the {@link RequestContextHolder} */
     public static void set(RequestInfo requestInfo) {
-        RequestContextHolder.getRequestAttributes()
-                .setAttribute(RequestInfo.KEY, requestInfo, RequestAttributes.SCOPE_REQUEST);
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes == null) {
+            throw new IllegalStateException("Request attributes are not set");
+        }
+        requestAttributes.setAttribute(
+                RequestInfo.KEY, requestInfo, RequestAttributes.SCOPE_REQUEST);
     }
 }

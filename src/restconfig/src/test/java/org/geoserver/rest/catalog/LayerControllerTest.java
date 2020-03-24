@@ -20,8 +20,10 @@ import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.StyleInfo;
 import org.geoserver.data.test.SystemTestData;
 import org.geoserver.rest.RestBaseController;
+import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.Test;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.w3c.dom.Document;
 
@@ -110,6 +112,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         // First request should thrown an exception
         MockHttpServletResponse response = getAsServletResponse(requestPath);
         assertEquals(404, response.getStatus());
+        assertEquals("text/plain", response.getContentType());
         assertTrue(response.getContentAsString().contains(exception));
         // Same request with ?quietOnNotFound should not throw an exception
         response = getAsServletResponse(requestPath + "?quietOnNotFound=true");
@@ -159,6 +162,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
 
         l = catalog.getLayerByName("cite:Buildings");
         assertEquals("Forests", l.getDefaultStyle().getName());
+        assertNotNull(l.getDateModified());
     }
 
     @Test
@@ -179,6 +183,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
 
         l = catalog.getLayerByName("cite:Buildings");
         assertEquals("Forests", l.getDefaultStyle().getName());
+        assertNotNull(l.getDateModified());
     }
 
     @Test
@@ -207,6 +212,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         assertEquals(isAdvertised, l.isAdvertised());
         assertEquals(isOpaque, l.isOpaque());
         assertEquals(isQueryable, l.isQueryable());
+        assertNotNull(l.getDateModified());
     }
 
     @Test
@@ -227,6 +233,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
 
         l = catalog.getLayerByName("cite:Buildings");
         assertEquals("polygon", l.getDefaultStyle().getName());
+        assertNotNull(l.getDateModified());
     }
 
     @Test
@@ -281,8 +288,9 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(ROOT_PATH + "/workspaces/cite/styles", xml);
 
-        System.out.println(response.getContentAsString());
+        // System.out.println(response.getContentAsString());
         assertEquals(201, response.getStatus());
+        assertThat(response.getContentType(), CoreMatchers.startsWith(MediaType.TEXT_PLAIN_VALUE));
         assertNotNull(cat.getStyleByName("cite", "foo"));
 
         xml =
@@ -301,6 +309,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         assertNotNull(l.getDefaultStyle());
         assertEquals("foo", l.getDefaultStyle().getName());
         assertNotNull(l.getDefaultStyle().getWorkspace());
+        assertNotNull(l.getDateModified());
 
         Document dom = getAsDOM(ROOT_PATH + "/layers/cite:Buildings.xml", 200);
         assertXpathExists("/layer/defaultStyle/name[text() = 'cite:foo']", dom);
@@ -322,6 +331,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(ROOT_PATH + "/workspaces/cite/styles", xml);
         assertEquals(201, response.getStatus());
+        assertThat(response.getContentType(), CoreMatchers.startsWith(MediaType.TEXT_PLAIN_VALUE));
         assertNotNull(cat.getStyleByName("cite", "foo"));
 
         xml =
@@ -343,6 +353,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         StyleInfo style = l.getStyles().iterator().next();
         assertEquals("foo", style.getName());
         assertNotNull(style.getWorkspace());
+        assertNotNull(l.getDateModified());
 
         Document dom = getAsDOM(ROOT_PATH + "/layers/cite:Buildings.xml", 200);
         assertXpathExists("/layer/styles/style/name[text() = 'cite:foo']", dom);
@@ -378,6 +389,7 @@ public class LayerControllerTest extends CatalogRESTTestSupport {
         l = cat.getLayerByName("cite:Buildings");
         assertNotNull(l.getDefaultWMSInterpolationMethod());
         assertEquals(LayerInfo.WMSInterpolation.Nearest, l.getDefaultWMSInterpolationMethod());
+        assertNotNull(l.getDateModified());
 
         dom = getAsDOM(ROOT_PATH + "/layers/cite:Buildings.xml", 200);
         assertXpathEvaluatesTo("1", "count(/layer/defaultWMSInterpolationMethod)", dom);

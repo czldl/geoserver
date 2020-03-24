@@ -58,11 +58,7 @@ public class SenderXStreamInitializer implements NotificationXStreamInitializer 
 
         private SenderXStreamInitializer senderXStreamInitializer;
 
-        /**
-         * @param mapper
-         * @param reflectionProvider
-         * @param senderXStreamInitializer
-         */
+        /** */
         public SenderConverter(
                 Mapper mapper,
                 ReflectionProvider reflectionProvider,
@@ -88,14 +84,12 @@ public class SenderXStreamInitializer implements NotificationXStreamInitializer 
             for (SenderXStreamInitializer serializer : serializers) {
                 if (serializer.name.equals(nodeName)) {
                     try {
-                        sender = serializer.clazz.newInstance();
+                        sender = serializer.clazz.getDeclaredConstructor().newInstance();
                         sender =
                                 (NotificationSender)
                                         context.convertAnother(sender, serializer.clazz);
                         break;
-                    } catch (InstantiationException e) {
-                        throw new RuntimeException(e);
-                    } catch (IllegalAccessException e) {
+                    } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }

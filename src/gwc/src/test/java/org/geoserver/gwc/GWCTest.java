@@ -8,10 +8,10 @@ package org.geoserver.gwc;
 import static com.google.common.collect.Iterators.forEnumeration;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.union;
-import static org.easymock.classextension.EasyMock.createMock;
-import static org.easymock.classextension.EasyMock.createMockBuilder;
-import static org.easymock.classextension.EasyMock.expect;
-import static org.easymock.classextension.EasyMock.replay;
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.createMockBuilder;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
 import static org.geoserver.gwc.GWC.tileLayerName;
 import static org.geoserver.gwc.GWCTestHelpers.mockGroup;
 import static org.geoserver.gwc.GWCTestHelpers.mockLayer;
@@ -24,10 +24,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -40,7 +40,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -121,6 +120,7 @@ import org.geowebcache.mime.MimeType;
 import org.geowebcache.seed.GWCTask;
 import org.geowebcache.seed.SeedRequest;
 import org.geowebcache.seed.TileBreeder;
+import org.geowebcache.seed.TruncateAllRequest;
 import org.geowebcache.service.Service;
 import org.geowebcache.storage.BlobStoreAggregator;
 import org.geowebcache.storage.CompositeBlobStore;
@@ -210,6 +210,7 @@ public class GWCTest {
     private BlobStoreAggregator blobStoreAggregator;
 
     @Before
+    @SuppressWarnings("deprecation")
     public void setUp() throws Exception {
 
         System.setProperty("ALLOW_ENV_PARAMETRIZATION", "true");
@@ -254,7 +255,7 @@ public class GWCTest {
                         testGridSet,
                         new BoundingBox(-180, 0, 0, 90),
                         0,
-                        testGridSet.getGridLevels().length - 1);
+                        testGridSet.getNumLevels() - 1);
         when(xmlConfig.getGridSet(eq("TEST"))).thenReturn(Optional.of(testGridSet));
         tileLayer.addGridSubset(testGridSubset);
         tileLayerGroup = new GeoServerTileLayer(layerGroup, gridSetBroker, tileLayerGroupInfo);
@@ -332,8 +333,6 @@ public class GWCTest {
         mediator.setApplicationContext(appContext);
 
         mediator = spy(mediator);
-        when(mediator.getXmlConfiguration()).thenReturn(xmlConfig);
-
         GWC.set(mediator);
     }
 
@@ -867,6 +866,23 @@ public class GWCTest {
     }
 
     @Test
+    public void testTruncateAll() throws Exception {
+        String layerName = tileLayer.getName();
+        when(tileBreeder.findTileLayer(layerName)).thenReturn(tileLayer);
+
+        ArrayList<TileLayer> mockList = new ArrayList<TileLayer>();
+        mockList.add(tileLayer);
+        when(tileBreeder.getLayers()).thenReturn(mockList);
+        for (String grid : tileLayer.getGridSubsets())
+            when(storageBroker.deleteByGridSetId(layerName, grid)).thenReturn(true);
+
+        TruncateAllRequest truncateAll = mediator.truncateAll();
+
+        verify(tileBreeder, times(1)).getLayers();
+        assertTrue(truncateAll.getTrucatedLayersList().contains(layerName));
+    }
+
+    @Test
     public void testLayerRemoved() throws Exception {
         mediator.layerRemoved("someLayer");
         verify(storageBroker, times(1)).delete(eq("someLayer"));
@@ -919,6 +935,7 @@ public class GWCTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testReload() throws Exception {
         mediator.reload();
         verify(tld, times(1)).reInit();
@@ -934,6 +951,7 @@ public class GWCTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testReloadAndLayerRemovedExternally() throws Exception {
 
         final String removedLayer = tileLayer.getName();
@@ -1416,7 +1434,7 @@ public class GWCTest {
             urls = newArrayList(forEnumeration(classLoader.getResources(defaultResource)));
             urls.addAll(newArrayList(forEnumeration(classLoader.getResources(testResource))));
         } catch (IOException e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e);
         }
 
         // from src/main/resources/org/geoserver/gwc/advertised_formats.properties
@@ -1539,7 +1557,7 @@ public class GWCTest {
         when(subset.boundsFromIndex(eq(new long[] {col, row, zoom}))).thenReturn(bounds);
         when(subset.getSRS()).thenReturn(srs);
         doReturn(crs).when(mediator).getCRSForGridset(eq(subset));
-        when(tileLayer.getLayerInfo()).thenReturn(layer);
+        when(tileLayer.getPublishedInfo()).thenReturn(layer);
         when(layer.getResource()).thenReturn(featureType);
         when(featureType.getCRS()).thenReturn(crs);
         when(crs.getCoordinateSystem()).thenReturn(cs);

@@ -5,10 +5,7 @@
  */
 package org.geoserver.wms.legendgraphic;
 
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.RenderingHints.Key;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
@@ -38,6 +35,7 @@ import org.geotools.styling.RasterSymbolizer;
 import org.geotools.styling.Rule;
 import org.geotools.styling.Style;
 import org.geotools.styling.Symbolizer;
+import org.geotools.util.SuppressFBWarnings;
 import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.feature.type.FeatureType;
 import org.opengis.feature.type.PropertyDescriptor;
@@ -427,10 +425,7 @@ public class LegendUtils {
      *
      * <p>1.0 is returned in case the provided {@link ColorMapEntry} is null or invalid.
      *
-     * @param entry
      * @return the opacity from the provided {@link ColorMapEntry} or 1.0 if something bad happens.
-     * @throws IllegalArgumentException
-     * @throws MissingResourceException
      */
     public static double getOpacity(final ColorMapEntry entry)
             throws IllegalArgumentException, MissingResourceException {
@@ -455,7 +450,9 @@ public class LegendUtils {
             opacity = ExpressionExtractor.extractCqlExpressions(opacityExp);
             opacityValue = opacity.evaluate(null, Double.class);
         }
-        if ((opacityValue.doubleValue() - 1) > 0 || opacityValue.doubleValue() < 0) {
+        if (opacityValue == null
+                || (opacityValue.doubleValue() - 1) > 0
+                || opacityValue.doubleValue() < 0) {
             throw new IllegalArgumentException(
                     Errors.format(ErrorKeys.ILLEGAL_ARGUMENT_$2, "Opacity", opacityValue));
         }
@@ -490,6 +487,10 @@ public class LegendUtils {
      * @return the {@link Color} out of this {@link ColorMapEntry}.
      * @throws NumberFormatException in case the color string is badly formatted.
      */
+    @SuppressFBWarnings({
+        "NP_NULL_ON_SOME_PATH",
+        "NP_NULL_PARAM_DEREF"
+    }) // SP does not recognize the check in ensureNotNull
     public static Color color(final ColorMapEntry entry) {
         ensureNotNull(entry, "entry");
         Expression color = entry.getColor();
@@ -510,6 +511,7 @@ public class LegendUtils {
      *     part.
      * @return the quantity part for the provided {@link ColorMapEntry}.
      */
+    @SuppressFBWarnings("NP_NULL_ON_SOME_PATH") // SP does not recognize the check in ensureNotNull
     public static double getQuantity(final ColorMapEntry entry) {
         ensureNotNull(entry, "entry");
         Expression quantity = entry.getQuantity();
@@ -543,8 +545,6 @@ public class LegendUtils {
     /**
      * Finds the applicable Rules for the given scale denominator.
      *
-     * @param ftStyles
-     * @param scaleDenominator
      * @return an array of {@link Rule}s.
      */
     public static Rule[] getApplicableRules(
@@ -556,11 +556,7 @@ public class LegendUtils {
         // get applicable rules at the current scale
         for (int i = 0; i < ftStyles.length; i++) {
             FeatureTypeStyle fts = ftStyles[i];
-            Rule[] rules = fts.getRules();
-
-            for (int j = 0; j < rules.length; j++) {
-                Rule r = rules[j];
-
+            for (Rule r : fts.rules()) {
                 if (isWithInScale(r, scaleDenominator)) {
                     ruleList.add(r);
 
@@ -652,7 +648,9 @@ public class LegendUtils {
             rlg.setRenderingHint(
                     RenderingHints.KEY_TEXT_ANTIALIASING,
                     g.getRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING));
-
+            rlg.setRenderingHint(
+                    RenderingHints.KEY_FRACTIONALMETRICS,
+                    g.getRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS));
             int y = 0 - g.getFontMetrics().getDescent();
             int c = 0;
 
@@ -667,13 +665,15 @@ public class LegendUtils {
             int height = (int) Math.ceil(g.getFontMetrics().getStringBounds(label, g).getHeight());
             int width = (int) Math.ceil(g.getFontMetrics().getStringBounds(label, g).getWidth());
             renderedLabel = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-
             Graphics2D rlg = renderedLabel.createGraphics();
             rlg.setColor(labelColor);
             rlg.setFont(g.getFont());
             rlg.setRenderingHint(
                     RenderingHints.KEY_TEXT_ANTIALIASING,
                     g.getRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING));
+            rlg.setRenderingHint(
+                    RenderingHints.KEY_FRACTIONALMETRICS,
+                    g.getRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS));
             rlg.drawString(label, 0, height - rlg.getFontMetrics().getDescent());
             rlg.dispose();
         }
@@ -786,21 +786,13 @@ public class LegendUtils {
         return false;
     }
 
-    /**
-     * Locates the specified rule by name
-     *
-     * @param fts
-     * @param rule
-     */
+    /** Locates the specified rule by name */
     public static Rule getRule(FeatureTypeStyle[] fts, String rule) {
         Rule sldRule = null;
         for (int i = 0; i < fts.length; i++) {
-            Rule[] rules = fts[i].getRules();
-
-            for (int r = 0; r < rules.length; r++) {
-                if (rule.equalsIgnoreCase(rules[r].getName())) {
-                    sldRule = rules[r];
-
+            for (Rule r : fts[i].rules()) {
+                if (rule.equalsIgnoreCase(r.getName())) {
+                    sldRule = r;
                     if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine(
                                 new StringBuffer("found requested rule: ").append(rule).toString());

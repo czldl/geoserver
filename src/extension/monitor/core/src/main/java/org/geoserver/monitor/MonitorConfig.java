@@ -9,12 +9,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.geoserver.config.GeoServerPluginConfigurator;
-import org.geoserver.data.util.IOUtils;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.platform.resource.Files;
@@ -22,6 +25,7 @@ import org.geoserver.platform.resource.Paths;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resources;
 import org.geoserver.security.PropertyFileWatcher;
+import org.geoserver.util.IOUtils;
 import org.geotools.referencing.CRS;
 import org.geotools.util.ConverterFactory;
 import org.geotools.util.Converters;
@@ -47,9 +51,6 @@ public class MonitorConfig implements GeoServerPluginConfigurator, ApplicationCo
     public static enum Mode {
         HISTORY,
         LIVE,
-
-        @Deprecated // use live
-        HYBRID;
     }
 
     public static enum BboxMode {
@@ -96,9 +97,6 @@ public class MonitorConfig implements GeoServerPluginConfigurator, ApplicationCo
 
     public Mode getMode() {
         Mode m = Mode.valueOf(props().getProperty("mode", "history").toUpperCase());
-        if (m == Mode.HYBRID) {
-            m = Mode.LIVE;
-        }
         return m;
     }
 
@@ -136,6 +134,14 @@ public class MonitorConfig implements GeoServerPluginConfigurator, ApplicationCo
         return BboxMode.valueOf(mode.toUpperCase());
     }
 
+    public Set<String> getIgnorePostProcessors() {
+        String list = props.getProperty("ignorePostProcessors");
+
+        if (list == null || list.isEmpty()) return Collections.EMPTY_SET;
+
+        return Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(list.split(","))));
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -163,7 +169,7 @@ public class MonitorConfig implements GeoServerPluginConfigurator, ApplicationCo
         if (storage == null) {
             // storage key not found, for backward compatibility look up mode
             Mode mode = getMode();
-            if (mode == Mode.HISTORY || mode == Mode.HYBRID) {
+            if (mode == Mode.HISTORY) {
                 storage = "hibernate";
             }
         }
@@ -254,11 +260,7 @@ public class MonitorConfig implements GeoServerPluginConfigurator, ApplicationCo
         return configurationFiles;
     }
 
-    /**
-     * @param loader
-     * @return
-     * @throws IOException
-     */
+    /** */
     public Resource getConfigurationFile(GeoServerResourceLoader loader) throws IOException {
         Resource f = loader.get(Paths.path("monitoring", MonitorConfig.PROPERTYFILENAME));
         if (!Resources.exists(f)) {

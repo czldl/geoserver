@@ -52,16 +52,18 @@ public class GeoServerInfoImpl implements GeoServerInfo {
 
     protected WebUIMode webUIMode = WebUIMode.DEFAULT;
 
+    protected Boolean allowStoredQueriesPerWorkspace = true;
+
     // deprecated members, kept around to maintain xstream persistence backward compatability
-    @Deprecated protected ContactInfo contact;
-    @Deprecated protected String charset;
-    @Deprecated protected String title;
-    @Deprecated protected Integer numDecimals;
-    @Deprecated protected String onlineResource;
-    @Deprecated protected String schemaBaseUrl;
-    @Deprecated protected String proxyBaseUrl;
-    @Deprecated protected Boolean verbose;
-    @Deprecated protected Boolean verboseExceptions;
+    protected ContactInfo contact;
+    protected String charset;
+    protected String title;
+    protected Integer numDecimals;
+    protected String onlineResource;
+    protected String schemaBaseUrl;
+    protected String proxyBaseUrl;
+    protected Boolean verbose;
+    protected Boolean verboseExceptions;
 
     private ResourceErrorHandling resourceErrorHandling;
 
@@ -281,6 +283,16 @@ public class GeoServerInfoImpl implements GeoServerInfo {
         if (coverageAccess != null) {
             coverageAccess.dispose();
         }
+    }
+
+    public Boolean isAllowStoredQueriesPerWorkspace() {
+        return allowStoredQueriesPerWorkspace == null
+                ? Boolean.TRUE
+                : allowStoredQueriesPerWorkspace;
+    }
+
+    public void setAllowStoredQueriesPerWorkspace(Boolean allowStoredQueriesPerWorkspace) {
+        this.allowStoredQueriesPerWorkspace = allowStoredQueriesPerWorkspace;
     }
 
     public int hashCode() {

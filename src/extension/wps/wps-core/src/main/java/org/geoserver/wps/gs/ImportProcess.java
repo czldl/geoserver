@@ -51,9 +51,9 @@ import org.geotools.process.ProcessException;
 import org.geotools.process.factory.DescribeParameter;
 import org.geotools.process.factory.DescribeProcess;
 import org.geotools.process.factory.DescribeResult;
-import org.geotools.process.gs.GSProcess;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
+import org.geotools.util.URLs;
 import org.geotools.util.logging.Logging;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
@@ -75,7 +75,7 @@ import org.vfny.geoserver.util.WCSUtils;
     title = "Import to Catalog",
     description = "Imports a feature collection into the catalog"
 )
-public class ImportProcess implements GSProcess {
+public class ImportProcess implements GeoServerProcess {
 
     static final Logger LOGGER = Logging.getLogger(ImportProcess.class);
 
@@ -345,19 +345,17 @@ public class ImportProcess implements GSProcess {
                 final Resource directory =
                         catalog.getResourceLoader().get(Paths.path("data", workspace, store));
                 final File file = File.createTempFile(store, ".tif", directory.dir());
-                ((CoverageStoreInfo) storeInfo).setURL(file.toURL().toExternalForm());
+                ((CoverageStoreInfo) storeInfo).setURL(URLs.fileToUrl(file).toExternalForm());
                 ((CoverageStoreInfo) storeInfo).setType("GeoTIFF");
 
                 // check the target crs
                 CoordinateReferenceSystem cvCrs = coverage.getCoordinateReferenceSystem();
-                String targetSRSCode = null;
                 if (srs != null) {
                     try {
                         Integer code = CRS.lookupEpsgCode(srs, true);
                         if (code == null) {
                             throw new WPSException("Could not find a EPSG code for " + srs);
                         }
-                        targetSRSCode = "EPSG:" + code;
                     } catch (Exception e) {
                         throw new ProcessException(
                                 "Could not lookup the EPSG code for the provided srs", e);
@@ -366,8 +364,6 @@ public class ImportProcess implements GSProcess {
                     // check we can extract a code from the original data
                     if (cvCrs == null) {
                         // data is geometryless, we need a fake SRS
-                        targetSRSCode = "EPSG:4326";
-                        srsHandling = ProjectionPolicy.FORCE_DECLARED;
                         srs = DefaultGeographicCRS.WGS84;
                     } else {
                         CoordinateReferenceSystem nativeCrs = cvCrs;
@@ -384,7 +380,7 @@ public class ImportProcess implements GSProcess {
                                                     + "native spatial reference system: "
                                                     + nativeCrs);
                                 } else {
-                                    targetSRSCode = "EPSG:" + code;
+                                    String targetSRSCode = "EPSG:" + code;
                                     srs = CRS.decode(targetSRSCode, true);
                                 }
                             } catch (Exception e) {
@@ -419,8 +415,7 @@ public class ImportProcess implements GSProcess {
                 params.parameter(AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName().toString())
                         .setValue(DEFAULT_WRITE_PARAMS);
                 final GeneralParameterValue[] wps =
-                        (GeneralParameterValue[])
-                                params.values().toArray(new GeneralParameterValue[1]);
+                        params.values().toArray(new GeneralParameterValue[1]);
 
                 try {
                     writer.write(coverage, wps);
@@ -436,12 +431,12 @@ public class ImportProcess implements GSProcess {
 
                 // add or update the datastore info
                 if (add) {
-                    catalog.add((CoverageStoreInfo) storeInfo);
+                    catalog.add(storeInfo);
                 } else {
-                    catalog.save((CoverageStoreInfo) storeInfo);
+                    catalog.save(storeInfo);
                 }
 
-                cb.setStore((CoverageStoreInfo) storeInfo);
+                cb.setStore(storeInfo);
 
                 GridCoverage2DReader reader = new GeoTiffReader(file);
                 if (reader == null) {
@@ -620,6 +615,7 @@ public class ImportProcess implements GSProcess {
         // start a transaction and fill the target with the input features
         SimpleFeatureStore fstore =
                 (SimpleFeatureStore) ds.getFeatureSource(targetType.getTypeName());
+        @SuppressWarnings("PMD.CloseResource") // cannot use in try/resource, just to rollback
         Transaction t = new DefaultTransaction();
         fstore.setTransaction(t);
         boolean complete = false;
@@ -659,9 +655,6 @@ public class ImportProcess implements GSProcess {
     /**
      * Applies a set of heuristics to find which target attribute corresponds to a certain input
      * attribute
-     *
-     * @param sourceType
-     * @param targetType
      */
     Map<String, String> buildAttributeMapping(
             SimpleFeatureType sourceType, SimpleFeatureType targetType) {

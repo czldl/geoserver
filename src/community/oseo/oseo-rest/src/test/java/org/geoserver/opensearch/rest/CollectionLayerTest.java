@@ -74,12 +74,6 @@ public class CollectionLayerTest extends OSEORestTestSupport {
     }
 
     @Override
-    protected String getLogConfiguration() {
-        // return "/GEOTOOLS_DEVELOPER_LOGGING.properties";
-        return super.getLogConfiguration();
-    }
-
-    @Override
     protected void onSetUp(SystemTestData testData) throws Exception {
         // PNGJ has bugs with band selected data, fall back on JDK
         super.onSetUp(testData);
@@ -137,7 +131,7 @@ public class CollectionLayerTest extends OSEORestTestSupport {
     }
 
     protected String getTestStringData(String location) throws IOException {
-        return IOUtils.toString(getClass().getResourceAsStream(location));
+        return IOUtils.toString(getClass().getResourceAsStream(location), "UTF-8");
     }
 
     @Test
@@ -281,11 +275,7 @@ public class CollectionLayerTest extends OSEORestTestSupport {
         ImageAssert.assertEquals(expected, image, 1000);
     }
 
-    /**
-     * This test checks it's possible to change an existing configuration and stuff still works
-     *
-     * @throws Exception
-     */
+    /** This test checks it's possible to change an existing configuration and stuff still works */
     @Test
     public void testModifyConfigurationSingleBand() throws Exception {
         // setup and check one collection

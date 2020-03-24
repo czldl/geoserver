@@ -137,16 +137,12 @@ class LayerGroupContainmentCache {
                         });
         // this group does not contain anything anymore, remove from containment
         for (LayerGroupSummary d : groupCache.values()) {
-            d.containerGroups.remove(lg);
+            // will be removed by equality
+            d.containerGroups.remove(new LayerGroupSummary(lg));
         }
     }
 
-    /**
-     * Returns all groups containing directly or indirectly containing the resource
-     *
-     * @param resource
-     * @return
-     */
+    /** Returns all groups containing directly or indirectly containing the resource */
     public Collection<LayerGroupSummary> getContainerGroupsFor(ResourceInfo resource) {
         String id = resource.getId();
         Set<LayerGroupSummary> groups = resourceContainmentCache.get(id);
@@ -163,9 +159,6 @@ class LayerGroupContainmentCache {
     /**
      * Returns all groups containing directly or indirectly the specified group, and relevant for
      * security (e.g., anything but {@link LayerGroupInfo.Mode#SINGLE} ones
-     *
-     * @param lg
-     * @return
      */
     public Collection<LayerGroupSummary> getContainerGroupsFor(LayerGroupInfo lg) {
         String id = lg.getId();
@@ -186,9 +179,6 @@ class LayerGroupContainmentCache {
 
     /**
      * Recursively collects the group and all its containers in the <data>groups</data> collection
-     *
-     * @param lg
-     * @param groups
      */
     private void collectContainers(LayerGroupSummary lg, Set<LayerGroupSummary> groups) {
         if (!groups.contains(lg)) {

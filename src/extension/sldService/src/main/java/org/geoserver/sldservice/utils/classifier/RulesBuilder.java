@@ -23,7 +23,6 @@ import org.geotools.styling.Mark;
 import org.geotools.styling.Rule;
 import org.geotools.styling.StyleBuilder;
 import org.geotools.styling.StyleFactory;
-import org.geotools.styling.Symbolizer;
 import org.geotools.util.factory.GeoTools;
 import org.opengis.filter.Filter;
 import org.opengis.filter.FilterFactory2;
@@ -126,10 +125,6 @@ public class RulesBuilder {
     /**
      * Generate a List of rules using equal interval classification Sets up only filter not
      * symbolizer
-     *
-     * @param features
-     * @param property
-     * @param classNumber
      */
     public List<Rule> equalIntervalClassification(
             FeatureCollection features,
@@ -145,9 +140,6 @@ public class RulesBuilder {
     /**
      * Generate a List of rules using unique interval classification Sets up only filter not
      * symbolizer
-     *
-     * @param features
-     * @param property
      */
     public List<Rule> uniqueIntervalClassification(
             FeatureCollection features,
@@ -174,10 +166,6 @@ public class RulesBuilder {
     /**
      * Generate a List of rules using Jenks Natural Breaks classification Sets up only filter not
      * symbolizer
-     *
-     * @param features
-     * @param property
-     * @param classNumber
      */
     public List<Rule> jenksClassification(
             FeatureCollection features,
@@ -191,10 +179,6 @@ public class RulesBuilder {
 
     /**
      * Generate a List of rules using Equal Area classification. Sets up only filter not symbolizer.
-     *
-     * @param features
-     * @param property
-     * @param classNumber
      */
     public List<Rule> equalAreaClassification(
             FeatureCollection features,
@@ -207,13 +191,7 @@ public class RulesBuilder {
                 features, property, propertyType, classNumber, open, normalize, "EqualArea");
     }
 
-    /**
-     * Generate Polygon Symbolyzer for each rule in list Fill color is choose from rampcolor
-     *
-     * @param rules
-     * @param fillRamp
-     * @param reverseColors
-     */
+    /** Generate Polygon Symbolyzer for each rule in list Fill color is choose from rampcolor */
     public void polygonStyle(List<Rule> rules, ColorRamp fillRamp, boolean reverseColors) {
 
         Iterator<Rule> it;
@@ -233,14 +211,14 @@ public class RulesBuilder {
             while (it.hasNext() && colors.hasNext()) {
                 color = colors.next();
                 rule = it.next();
-                rule.setSymbolizers(
-                        new Symbolizer[] {
-                            sb.createPolygonSymbolizer(
-                                    strokeWeight < 0
-                                            ? null
-                                            : sb.createStroke(strokeColor, strokeWeight),
-                                    sb.createFill(color))
-                        });
+                rule.symbolizers().clear();
+                rule.symbolizers()
+                        .add(
+                                sb.createPolygonSymbolizer(
+                                        strokeWeight < 0
+                                                ? null
+                                                : sb.createStroke(strokeColor, strokeWeight),
+                                        sb.createFill(color)));
             }
         } catch (Exception e) {
             if (LOGGER.isLoggable(Level.INFO))
@@ -251,12 +229,7 @@ public class RulesBuilder {
         }
     }
 
-    /**
-     * Generate Polygon Symbolyzer for each rule in list Fill color is choose from rampcolor
-     *
-     * @param rules
-     * @param ramp
-     */
+    /** Generate Polygon Symbolyzer for each rule in list Fill color is choose from rampcolor */
     public void pointStyle(List<Rule> rules, ColorRamp fillRamp, boolean reverseColors) {
 
         Iterator<Rule> it;
@@ -285,11 +258,11 @@ public class RulesBuilder {
                                 includeStrokeForPoints && strokeWeight >= 0
                                         ? sb.createStroke(strokeColor, strokeWeight)
                                         : null);
-                rule.setSymbolizers(
-                        new Symbolizer[] {
-                            sb.createPointSymbolizer(
-                                    sb.createGraphic(null, mark, null, 1.0, pointSize, 0.0))
-                        });
+                rule.symbolizers().clear();
+                rule.symbolizers()
+                        .add(
+                                sb.createPointSymbolizer(
+                                        sb.createGraphic(null, mark, null, 1.0, pointSize, 0.0)));
             }
         } catch (Exception e) {
             if (LOGGER.isLoggable(Level.INFO))
@@ -300,13 +273,7 @@ public class RulesBuilder {
         }
     }
 
-    /**
-     * Generate Line Symbolyzer for each rule in list Stroke color is choose from rampcolor
-     *
-     * @param rules
-     * @param fillRamp
-     * @param reverseColors
-     */
+    /** Generate Line Symbolyzer for each rule in list Stroke color is choose from rampcolor */
     public void lineStyle(List<Rule> rules, ColorRamp fillRamp, boolean reverseColors) {
 
         Iterator<Rule> it;
@@ -326,7 +293,8 @@ public class RulesBuilder {
             while (it.hasNext() && colors.hasNext()) {
                 color = colors.next();
                 rule = it.next();
-                rule.setSymbolizers(new Symbolizer[] {sb.createLineSymbolizer(color)});
+                rule.symbolizers().clear();
+                rule.symbolizers().add(sb.createLineSymbolizer(color));
             }
         } catch (Exception e) {
             if (LOGGER.isLoggable(Level.INFO))
@@ -339,12 +307,7 @@ public class RulesBuilder {
         return this.SF;
     }
 
-    /**
-     * Generate Rules from Rangedclassifier groups build a List of rules
-     *
-     * @param groups
-     * @param property
-     */
+    /** Generate Rules from Rangedclassifier groups build a List of rules */
     public List<Rule> openRangedRules(
             RangedClassifier groups, String property, Class<?> propertyType, boolean normalize) {
 
@@ -356,36 +319,46 @@ public class RulesBuilder {
         try {
             /* First class */
             r = SF.createRule();
-            f = FF.less(att, FF.literal(groups.getMax(0)));
+            if (groups.getMin(0).equals(groups.getMax(0))) {
+                f = FF.equals(att, FF.literal(groups.getMin(0)));
+                r.getDescription().setTitle((FF.literal(groups.getMin(0)).toString()));
+            } else {
+                f = FF.less(att, FF.literal(groups.getMax(0)));
+                r.getDescription().setTitle(" < " + FF.literal(groups.getMax(0)));
+            }
             r.setFilter(f);
-            r.setTitle(" < " + FF.literal(groups.getMax(0)));
             list.add(r);
             for (int i = 1; i < groups.getSize() - 1; i++) {
                 r = SF.createRule();
                 if (groups.getMin(i).equals(groups.getMax(i))) {
                     f = FF.equals(att, FF.literal(groups.getMax(i)));
-                    r.setTitle(FF.literal(groups.getMin(i)).toString());
-                    r.setFilter(f);
-                    list.add(r);
+                    if (!isDuplicatedClass(list, f)) {
+                        r.getDescription().setTitle((FF.literal(groups.getMin(i)).toString()));
+                        r.setFilter(f);
+                        list.add(r);
+                    }
                 } else {
                     f =
                             FF.and(
-                                    FF.greaterOrEqual(att, FF.literal(groups.getMin(i))),
+                                    getNotOverlappingFilter(i, groups, att),
                                     FF.less(att, FF.literal(groups.getMax(i))));
-                    r.setTitle(
-                            " >= "
-                                    + FF.literal(groups.getMin(i))
-                                    + " AND < "
-                                    + FF.literal(groups.getMax(i)));
-                    r.setFilter(f);
-                    list.add(r);
+                    if (!isDuplicatedClass(list, f)) {
+                        r.getDescription()
+                                .setTitle(
+                                        (" >= "
+                                                + FF.literal(groups.getMin(i))
+                                                + " AND < "
+                                                + FF.literal(groups.getMax(i))));
+                        r.setFilter(f);
+                        list.add(r);
+                    }
                 }
             }
             /* Last class */
             r = SF.createRule();
-            f = FF.greaterOrEqual(att, FF.literal(groups.getMin(groups.getSize() - 1)));
+            f = getNotOverlappingFilter(groups.getSize() - 1, groups, att);
             r.setFilter(f);
-            r.setTitle(" >= " + FF.literal(groups.getMin(groups.getSize() - 1)));
+            r.getDescription().setTitle((" >= " + FF.literal(groups.getMin(groups.getSize() - 1))));
             list.add(r);
             return list;
         } catch (Exception e) {
@@ -408,12 +381,7 @@ public class RulesBuilder {
         return property;
     }
 
-    /**
-     * Generate Rules from Rangedclassifier groups build a List of rules
-     *
-     * @param groups
-     * @param property
-     */
+    /** Generate Rules from Rangedclassifier groups build a List of rules */
     public List<Rule> closedRangedRules(
             RangedClassifier groups, String property, Class<?> propertyType, boolean normalize) {
 
@@ -428,25 +396,29 @@ public class RulesBuilder {
                 r = SF.createRule();
                 if (groups.getMin(i).equals(groups.getMax(i))) {
                     f = FF.equals(att, FF.literal(groups.getMin(i)));
-                    r.setTitle(FF.literal(groups.getMin(i)).toString());
-                    r.setFilter(f);
-                    list.add(r);
+                    if (!isDuplicatedClass(list, f)) {
+                        r.getDescription().setTitle((FF.literal(groups.getMin(i)).toString()));
+                        r.setFilter(f);
+                        list.add(r);
+                    }
                 } else {
                     f =
                             FF.and(
-                                    FF.greaterOrEqual(att, FF.literal(groups.getMin(i))),
+                                    getNotOverlappingFilter(i, groups, att),
                                     i == (groups.getSize() - 1)
                                             ? FF.lessOrEqual(att, FF.literal(groups.getMax(i)))
                                             : FF.less(att, FF.literal(groups.getMax(i))));
-
-                    r.setTitle(
-                            " >= "
-                                    + FF.literal(groups.getMin(i))
-                                    + " AND "
-                                    + (i == (groups.getSize() - 1) ? "<=" : "<")
-                                    + FF.literal(groups.getMax(i)));
-                    r.setFilter(f);
-                    list.add(r);
+                    if (!isDuplicatedClass(list, f)) {
+                        r.getDescription()
+                                .setTitle(
+                                        (" >= "
+                                                + FF.literal(groups.getMin(i))
+                                                + " AND "
+                                                + (i == (groups.getSize() - 1) ? "<=" : "<")
+                                                + FF.literal(groups.getMax(i))));
+                        r.setFilter(f);
+                        list.add(r);
+                    }
                 }
             }
             return list;
@@ -460,12 +432,7 @@ public class RulesBuilder {
         return null;
     }
 
-    /**
-     * Generate Rules from Explicit classifier groups build a List of rules
-     *
-     * @param groups
-     * @param property
-     */
+    /** Generate Rules from Explicit classifier groups build a List of rules */
     public List<Rule> explicitRules(
             ExplicitClassifier groups, String property, Class<?> propertyType) {
 
@@ -492,7 +459,7 @@ public class RulesBuilder {
                     szTitle += " OR " + val;
                 }
                 f = CQL.toFilter(szFilter);
-                r.setTitle(szTitle);
+                r.getDescription().setTitle(szTitle);
                 r.setFilter(f);
                 list.add(r);
             }
@@ -503,5 +470,33 @@ public class RulesBuilder {
                         Level.INFO, "Failed to build explicit Rules" + e.getLocalizedMessage(), e);
         }
         return null;
+    }
+
+    private boolean isDuplicatedClass(List<Rule> rules, Filter f) {
+        return rules.stream().anyMatch(r -> r.getFilter().equals(f));
+    }
+
+    /**
+     * Compares current min and previous min avoiding the production of overlapping Rules
+     *
+     * @param currentIdx
+     * @param groups
+     * @param att
+     * @return
+     */
+    private Filter getNotOverlappingFilter(
+            int currentIdx, RangedClassifier groups, Expression att) {
+        Filter f;
+        if (currentIdx > 0) {
+            Object currMin = groups.getMin(currentIdx);
+            Object prevMin = groups.getMin(currentIdx - 1);
+            if (!prevMin.equals(currMin))
+                f = FF.greaterOrEqual(att, FF.literal(groups.getMin(currentIdx)));
+            else f = FF.greater(att, FF.literal(groups.getMin(currentIdx)));
+        } else {
+            f = FF.greaterOrEqual(att, FF.literal(groups.getMin(currentIdx)));
+        }
+
+        return f;
     }
 }

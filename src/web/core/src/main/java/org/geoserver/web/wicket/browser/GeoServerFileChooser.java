@@ -23,6 +23,8 @@ import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
+import org.geoserver.platform.resource.Files;
+import org.geoserver.platform.resource.Resources;
 import org.geoserver.web.wicket.ParamResourceModel;
 import org.geotools.util.logging.Logging;
 
@@ -85,7 +87,12 @@ public class GeoServerFileChooser extends Panel {
 
         // first check if the file is a relative reference into the data dir
         if (selection != null) {
-            File relativeToDataDir = loader.url(selection.getPath());
+            File relativeToDataDir =
+                    Resources.find(
+                            Resources.fromURL(
+                                    Files.asResource(loader.getBaseDirectory()),
+                                    selection.getPath()),
+                            true);
             if (relativeToDataDir != null) {
                 selection = relativeToDataDir;
             }
@@ -187,9 +194,6 @@ public class GeoServerFileChooser extends Panel {
     /**
      * Action undertaken as a directory is clicked. Default behavior is to drill down into the
      * directory.
-     *
-     * @param file
-     * @param target
      */
     protected void directoryClicked(File file, AjaxRequestTarget target) {
         // explicitly change the root model, inform the other components the model has changed
@@ -216,8 +220,6 @@ public class GeoServerFileChooser extends Panel {
     /**
      * Set the file table fixed height. Set it to null if you don't want fixed height with overflow,
      * and to a valid CSS measure if you want it instead. Default value is "25em"
-     *
-     * @param height
      */
     public void setFileTableHeight(String height) {
         fileTable.setTableHeight(height);
@@ -226,7 +228,6 @@ public class GeoServerFileChooser extends Panel {
     //    /**
     //     * If the file is in the data directory builds a data dir relative path, otherwise
     //     * returns an absolute path
-    //     * @param file
     //     *
     //     */
     //    public String getRelativePath(File file) {

@@ -10,7 +10,6 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLConnection;
-import org.apache.commons.io.IOUtils;
 import org.apache.wicket.validation.IValidatable;
 import org.apache.wicket.validation.IValidationError;
 import org.apache.wicket.validation.IValidator;
@@ -19,6 +18,7 @@ import org.apache.wicket.validation.validator.UrlValidator;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.platform.resource.Files;
+import org.geoserver.platform.resource.Resources;
 
 /** Checks the specified file exists on the file system, including checks in the data directory */
 @SuppressWarnings("serial")
@@ -37,8 +37,6 @@ public class FileExistsValidator implements IValidator<String> {
     /**
      * If <code>allowRemoveUrl</code> is true this validator allows the file to be either local (no
      * URI scheme, or file URI scheme) or a remote
-     *
-     * @param allowRemoteUrl
      */
     public FileExistsValidator(boolean allowRemoteUrl) {
         if (allowRemoteUrl) {
@@ -56,19 +54,16 @@ public class FileExistsValidator implements IValidator<String> {
             if (uri.getScheme() != null && !"file".equals(uri.getScheme())) {
                 if (delegate != null) {
                     delegate.validate(validatable);
-                    InputStream is = null;
                     try {
                         URLConnection connection = uri.toURL().openConnection();
                         connection.setConnectTimeout(10000);
-                        is = connection.getInputStream();
+                        try (InputStream is = connection.getInputStream()) {}
                     } catch (Exception e) {
                         IValidationError err =
                                 new ValidationError("FileExistsValidator.unreachable")
                                         .addKey("FileExistsValidator.unreachable")
                                         .setVariable("file", uriSpec);
                         validatable.error(err);
-                    } finally {
-                        IOUtils.closeQuietly(is);
                     }
                 }
                 return;
@@ -91,7 +86,10 @@ public class FileExistsValidator implements IValidator<String> {
             relFile = Files.url(baseDirectory, uriSpec);
         } else if (loader != null) {
             // local to data directory?
-            relFile = loader.url(uriSpec);
+            relFile =
+                    Resources.find(
+                            Resources.fromURL(Files.asResource(loader.getBaseDirectory()), uriSpec),
+                            true);
         }
 
         if (relFile == null || !relFile.exists()) {

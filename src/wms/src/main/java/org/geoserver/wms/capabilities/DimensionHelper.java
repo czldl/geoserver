@@ -9,8 +9,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
 import org.geoserver.catalog.*;
 import org.geoserver.catalog.util.ReaderDimensionsAccessor;
 import org.geoserver.platform.ServiceException;
@@ -65,10 +68,11 @@ abstract class DimensionHelper {
     protected abstract void element(String element, String content, Attributes atts);
 
     void handleVectorLayerDimensions(LayerInfo layer) {
-        // TODO: custom dimension handling
-
         // do we have time and elevation?
-        FeatureTypeInfo typeInfo = (FeatureTypeInfo) layer.getResource();
+        final FeatureTypeInfo typeInfo = (FeatureTypeInfo) layer.getResource();
+        // do we have custom dimensions?
+        final Map<String, DimensionInfo> customDims = getCustomDimensions(typeInfo);
+
         DimensionInfo timeInfo = typeInfo.getMetadata().get(ResourceInfo.TIME, DimensionInfo.class);
         DimensionInfo elevInfo =
                 typeInfo.getMetadata().get(ResourceInfo.ELEVATION, DimensionInfo.class);
@@ -76,14 +80,19 @@ abstract class DimensionHelper {
         boolean hasElevation = elevInfo != null && elevInfo.isEnabled();
 
         // skip if no need
-        if (!hasTime && !hasElevation) {
+        if (!hasTime && !hasElevation && customDims.isEmpty()) {
             return;
         }
 
         if (mode == Mode.WMS11) {
             String elevUnits = hasElevation ? elevInfo.getUnits() : "";
             String elevUnitSymbol = hasElevation ? elevInfo.getUnitSymbol() : "";
-            declareWMS11Dimensions(hasTime, hasElevation, elevUnits, elevUnitSymbol, null);
+            declareWMS11Dimensions(
+                    hasTime,
+                    hasElevation,
+                    elevUnits,
+                    elevUnitSymbol,
+                    customDims.isEmpty() ? null : customDims);
         }
 
         // Time dimension
@@ -102,6 +111,75 @@ abstract class DimensionHelper {
                 throw new RuntimeException(e);
             }
         }
+        // custom dimensions
+        if (!customDims.isEmpty()) {
+            handleCustomDimensionsVector(typeInfo, customDims);
+        }
+    }
+
+    void handleCustomDimensionsVector(
+            FeatureTypeInfo featureTypeInfo, Map<String, DimensionInfo> customDims) {
+        for (Entry<String, DimensionInfo> entry : customDims.entrySet()) {
+            handleCustomDimensionVector(featureTypeInfo, entry);
+        }
+    }
+
+    void handleCustomDimensionVector(
+            FeatureTypeInfo featureTypeInfo, Entry<String, DimensionInfo> customDim) {
+        try {
+            final TreeSet<Object> values =
+                    wms.getDimensionValues(featureTypeInfo, customDim.getValue());
+            String metadata;
+            String units = customDim.getValue().getUnits();
+            String unitSymbol = customDim.getValue().getUnitSymbol();
+            final Optional<Class> dataTypeOpt = getDataType(values);
+            if (dataTypeOpt.isPresent()) {
+                final Class<Object> type = dataTypeOpt.get();
+                if (Date.class.isAssignableFrom(type)) {
+                    metadata = getTemporalDomainRepresentation(customDim.getValue(), values);
+                } else if (Number.class.isAssignableFrom(type)) {
+                    metadata = getNumberRepresentation(customDim.getValue(), values);
+                } else {
+                    final List<String> valuesList =
+                            values.stream()
+                                    .filter(x -> x != null)
+                                    .map(x -> x.toString())
+                                    .collect(Collectors.toList());
+                    metadata = getCustomDomainRepresentation(customDim.getValue(), valuesList);
+                }
+            } else {
+                metadata = "";
+            }
+            String defaultValue =
+                    getDefaultValueRepresentation(featureTypeInfo, "dim_" + customDim.getKey(), "");
+            writeCustomDimensionVector(
+                    customDim.getKey(), values, metadata, units, unitSymbol, defaultValue);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    Optional<Class> getDataType(Set<Object> values) {
+        return values.stream().filter(x -> x != null).findFirst().map(Object::getClass);
+    }
+
+    private Map<String, DimensionInfo> getCustomDimensions(final FeatureTypeInfo typeInfo) {
+        return typeInfo.getMetadata()
+                .entrySet()
+                .stream()
+                .filter(
+                        e ->
+                                e.getValue() instanceof DimensionInfo
+                                        && e.getKey() != null
+                                        && e.getKey().startsWith("dim_")
+                                        && !ResourceInfo.ELEVATION.equals(e.getKey())
+                                        && !ResourceInfo.TIME.equals(e.getKey()))
+                .map(
+                        e ->
+                                Pair.of(
+                                        e.getKey().replaceFirst("dim_", ""),
+                                        (DimensionInfo) e.getValue()))
+                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
     }
 
     void handleWMTSLayerDimensions(LayerInfo layerInfo) {
@@ -135,13 +213,7 @@ abstract class DimensionHelper {
         }
     }
 
-    /**
-     * Writes down the raster layer dimensions, if any
-     *
-     * @param layer
-     * @throws RuntimeException
-     * @throws IOException
-     */
+    /** Writes down the raster layer dimensions, if any */
     void handleRasterLayerDimensions(final LayerInfo layer) throws RuntimeException, IOException {
 
         // do we have time and elevation?
@@ -272,7 +344,7 @@ abstract class DimensionHelper {
             }
             elevations = dimensions.getElevationDomain();
         }
-        String elevationMetadata = getZDomainRepresentation(elevInfo, elevations);
+        String elevationMetadata = getNumberRepresentation(elevInfo, elevations);
         String defaultValue = getDefaultValueRepresentation(cvInfo, ResourceInfo.ELEVATION, "0");
         writeElevationDimension(
                 elevations,
@@ -334,7 +406,7 @@ abstract class DimensionHelper {
         final List<String> values = dimAccessor.getDomain(dimName);
         String metadata = getCustomDomainRepresentation(dimension, values);
         String defaultValue = wms.getDefaultCustomDimensionValue(dimName, cvInfo, String.class);
-        writeCustomDimension(
+        writeCustomDimensionRaster(
                 dimName, metadata, defaultValue, dimension.getUnits(), dimension.getUnitSymbol());
     }
 
@@ -381,7 +453,7 @@ abstract class DimensionHelper {
         }
     }
 
-    protected String getZDomainRepresentation(
+    protected String getNumberRepresentation(
             DimensionInfo dimension, TreeSet<? extends Object> values) {
         String elevationMetadata = null;
 
@@ -389,10 +461,10 @@ abstract class DimensionHelper {
 
         if (DimensionPresentation.LIST == dimension.getPresentation()) {
             for (Object val : values) {
-                if (val instanceof Double) {
+                if (val instanceof Number) {
                     buff.append(val);
                 } else {
-                    NumberRange<Double> range = (NumberRange<Double>) val;
+                    NumberRange range = (NumberRange) val;
                     buff.append(range.getMinimum())
                             .append("/")
                             .append(range.getMaximum())
@@ -406,7 +478,7 @@ abstract class DimensionHelper {
                             .replaceAll("\\]", "")
                             .replaceAll(" ", "");
         } else if (DimensionPresentation.CONTINUOUS_INTERVAL == dimension.getPresentation()) {
-            NumberRange<Double> range = getMinMaxZInterval(values);
+            NumberRange range = getMinMaxZInterval(values);
             buff.append(range.getMinimum());
             buff.append("/");
             buff.append(range.getMaximum());
@@ -414,25 +486,44 @@ abstract class DimensionHelper {
 
             elevationMetadata = buff.toString();
         } else if (DimensionPresentation.DISCRETE_INTERVAL == dimension.getPresentation()) {
-            NumberRange<Double> range = getMinMaxZInterval(values);
-            buff.append(range.getMinimum());
+            final NumberRange range = getMinMaxZInterval(values);
+            final Class<?> typeBinding = values.first().getClass();
+            final boolean isDecimal = isDecimal(typeBinding);
+            String minStr, maxStr;
+            if (isDecimal) {
+                minStr = String.valueOf(range.getMinimum());
+                maxStr = String.valueOf(range.getMaximum());
+            } else {
+                minStr = String.valueOf(Double.valueOf(range.getMinimum()).longValue());
+                maxStr = String.valueOf(Double.valueOf(range.getMaximum()).longValue());
+            }
+            buff.append(minStr);
             buff.append("/");
-            buff.append(range.getMaximum());
+            buff.append(maxStr);
             buff.append("/");
 
             BigDecimal resolution = dimension.getResolution();
             if (resolution != null) {
                 buff.append(resolution.doubleValue());
             } else {
-                if (values.size() >= 2 && allDoubles(values)) {
+                if (values.size() >= 2 && allNumbers(values)) {
                     int count = 2, i = 2;
-                    Double[] zPositions = new Double[count];
-                    for (Object val : values) {
-                        zPositions[count - i--] = (Double) val;
+                    Number[] zPositions = new Number[count];
+                    // convert all to double
+                    final List<Number> numberValues =
+                            values.stream().map(x -> (Number) x).collect(Collectors.toList());
+                    for (Object val : numberValues) {
+                        zPositions[count - i--] = (Number) val;
                         if (i == 0) break;
                     }
-                    double span = zPositions[count - 1] - zPositions[count - 2];
-                    buff.append(span);
+                    if (isDecimal)
+                        buff.append(
+                                zPositions[count - 1].doubleValue()
+                                        - zPositions[count - 2].doubleValue());
+                    else
+                        buff.append(
+                                zPositions[count - 1].longValue()
+                                        - zPositions[count - 2].longValue());
                 } else {
                     buff.append(0);
                 }
@@ -444,12 +535,13 @@ abstract class DimensionHelper {
         return elevationMetadata;
     }
 
-    /**
-     * Builds the proper presentation given the current
-     *
-     * @param dimension
-     * @param values
-     */
+    private boolean isDecimal(Class<?> typeBinding) {
+        return Float.class.isAssignableFrom(typeBinding)
+                || Double.class.isAssignableFrom(typeBinding)
+                || BigDecimal.class.isAssignableFrom(typeBinding);
+    }
+
+    /** Builds the proper presentation given the current */
     String getTemporalDomainRepresentation(
             DimensionInfo dimension, TreeSet<? extends Object> values) {
         String timeMetadata = null;
@@ -508,11 +600,7 @@ abstract class DimensionHelper {
         return timeMetadata;
     }
 
-    /**
-     * Builds a single time range from the domain, be it made of Date or TimeRange objects
-     *
-     * @param values
-     */
+    /** Builds a single time range from the domain, be it made of Date or TimeRange objects */
     private DateRange getMinMaxTimeInterval(TreeSet<? extends Object> values) {
         Object minValue = values.first();
         Object maxValue = values.last();
@@ -530,33 +618,25 @@ abstract class DimensionHelper {
         return new DateRange(min, max);
     }
 
-    /**
-     * Builds a single Z range from the domain, be it made of Double or NumberRange objects
-     *
-     * @param values
-     */
+    /** Builds a single Z range from the domain, be it made of Number or NumberRange objects */
     private NumberRange<Double> getMinMaxZInterval(TreeSet<? extends Object> values) {
         Object minValue = values.first();
         Object maxValue = values.last();
-        Double min, max;
+        Number min, max;
         if (minValue instanceof NumberRange) {
-            min = ((NumberRange<Double>) minValue).getMinValue();
+            min = (Number) ((NumberRange) minValue).getMinValue();
         } else {
-            min = (Double) minValue;
+            min = (Number) minValue;
         }
         if (maxValue instanceof NumberRange) {
-            max = ((NumberRange<Double>) maxValue).getMaxValue();
+            max = (Number) ((NumberRange) maxValue).getMaxValue();
         } else {
-            max = (Double) maxValue;
+            max = (Number) maxValue;
         }
-        return new NumberRange<Double>(Double.class, min, max);
+        return new NumberRange(min.getClass(), min, max);
     }
 
-    /**
-     * Returns true if all the values in the set are Date instances
-     *
-     * @param values
-     */
+    /** Returns true if all the values in the set are Date instances */
     private boolean allDates(TreeSet<? extends Object> values) {
         for (Object value : values) {
             if (!(value instanceof Date)) {
@@ -567,14 +647,10 @@ abstract class DimensionHelper {
         return true;
     }
 
-    /**
-     * Returns true if all the values in the set are Double instances
-     *
-     * @param values
-     */
-    private boolean allDoubles(TreeSet<? extends Object> values) {
+    /** Returns true if all the values in the set are Number instances */
+    private boolean allNumbers(TreeSet<? extends Object> values) {
         for (Object value : values) {
-            if (!(value instanceof Double)) {
+            if (!(value instanceof Number)) {
                 return false;
             }
         }
@@ -582,12 +658,7 @@ abstract class DimensionHelper {
         return true;
     }
 
-    /**
-     * Builds the proper presentation given the specified value domain
-     *
-     * @param dimension
-     * @param values
-     */
+    /** Builds the proper presentation given the specified value domain */
     String getCustomDomainRepresentation(DimensionInfo dimension, List<String> values) {
         String metadata = null;
 
@@ -618,12 +689,7 @@ abstract class DimensionHelper {
         return metadata;
     }
 
-    /**
-     * Writes out metadata for the time dimension
-     *
-     * @param typeInfo
-     * @throws IOException
-     */
+    /** Writes out metadata for the time dimension */
     private void handleTimeDimensionVector(FeatureTypeInfo typeInfo) throws IOException {
         // build the time dim representation
         TreeSet<Date> values = wms.getFeatureTypeTimes(typeInfo);
@@ -650,7 +716,7 @@ abstract class DimensionHelper {
         String units = di.getUnits();
         String unitSymbol = di.getUnitSymbol();
         if (elevations != null && !elevations.isEmpty()) {
-            elevationMetadata = getZDomainRepresentation(di, elevations);
+            elevationMetadata = getNumberRepresentation(di, elevations);
         } else {
             elevationMetadata = "";
         }
@@ -721,7 +787,7 @@ abstract class DimensionHelper {
         element("Dimension", elevationMetadata, elevDim);
     }
 
-    private void writeCustomDimension(
+    private void writeCustomDimensionRaster(
             String name, String metadata, String defaultValue, String unit, String unitSymbol) {
         AttributesImpl dim = new AttributesImpl();
         dim.addAttribute("", NAME, NAME, "", name);
@@ -741,5 +807,46 @@ abstract class DimensionHelper {
 
             element("Dimension", metadata, dim);
         }
+    }
+
+    private void writeCustomDimensionVector(
+            final String name,
+            final TreeSet<? extends Object> elevations,
+            final String metadata,
+            final String units,
+            final String unitSymbol,
+            final String defaultValue) {
+        if (mode == Mode.WMS11) {
+            AttributesImpl elevDim = new AttributesImpl();
+            elevDim.addAttribute("", NAME, NAME, "", name);
+            elevDim.addAttribute("", DEFAULT, DEFAULT, "", defaultValue);
+            element("Extent", metadata, elevDim);
+        } else {
+            writeCustomDimensionElement(name, metadata, defaultValue, units, unitSymbol);
+        }
+    }
+
+    private void writeCustomDimensionElement(
+            final String name,
+            final String metadata,
+            final String defaultValue,
+            final String units,
+            final String unitSymbol) {
+        final AttributesImpl elevDim = new AttributesImpl();
+        String unitsNotNull = units;
+        String unitSymNotNull = (unitSymbol == null) ? "" : unitSymbol;
+        if (units == null) {
+            unitsNotNull = DimensionInfo.ELEVATION_UNITS;
+            unitSymNotNull = DimensionInfo.ELEVATION_UNIT_SYMBOL;
+        }
+        elevDim.addAttribute("", NAME, NAME, "", name);
+        if (defaultValue != null) {
+            elevDim.addAttribute("", DEFAULT, DEFAULT, "", defaultValue);
+        }
+        elevDim.addAttribute("", UNITS, UNITS, "", unitsNotNull);
+        if (!"".equals(unitsNotNull) && !"".equals(unitSymNotNull)) {
+            elevDim.addAttribute("", UNIT_SYMBOL, UNIT_SYMBOL, "", unitSymNotNull);
+        }
+        element("Dimension", metadata, elevDim);
     }
 }

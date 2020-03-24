@@ -5,22 +5,32 @@
  */
 package org.geoserver.wms.web.data;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.FileReader;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.commons.io.IOUtils;
+import org.apache.wicket.ajax.markup.html.AjaxLink;
 import org.apache.wicket.feedback.FeedbackMessage;
+import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.TextArea;
 import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.form.upload.FileUploadField;
 import org.apache.wicket.util.file.File;
 import org.apache.wicket.util.tester.FormTester;
+import org.apache.wicket.util.tester.TagTester;
 import org.geoserver.catalog.StyleInfo;
+import org.geoserver.config.GeoServerDataDirectory;
 import org.geoserver.config.GeoServerInfo;
 import org.geoserver.data.test.SystemTestData;
 import org.geoserver.platform.resource.Resource;
+import org.geoserver.platform.resource.Resources;
+import org.geoserver.web.GeoServerApplication;
 import org.geoserver.web.GeoServerWicketTestSupport;
 import org.geoserver.web.wicket.GeoServerAjaxFormLink;
 import org.junit.Before;
@@ -76,6 +86,28 @@ public class StyleNewPageTest extends GeoServerWicketTestSupport {
                 TextField.class);
 
         tester.assertModelValue("styleForm:context:panel:name", "");
+    }
+
+    @Test
+    public void testCopyFormat() {
+        FormTester form = tester.newFormTester("styleForm");
+        // Select the ZIP format
+        form.select("context:panel:format", new StyleFormatsModel().getObject().indexOf("zip"));
+        tester.executeAjaxEvent("styleForm:context:panel:format", "change");
+        // Select the SLD style to copy
+        form.select("context:panel:existingStyles", 0);
+        tester.executeAjaxEvent("styleForm:context:panel:existingStyles", "change");
+        // Verify that the format is ZIP
+        tester.assertModelValue("styleForm:context:panel:format", "zip");
+        // Copy the SLD style
+        tester.clickLink("styleForm:context:panel:copy", true);
+        // Verify that the format is SLD on the server
+        tester.assertModelValue("styleForm:context:panel:format", "sld");
+        // Verify that the format is SLD in the response page
+        String doc = tester.getLastResponse().getDocument();
+        TagTester tag = TagTester.createTagByAttribute(doc, "name", "context:panel:format");
+        tag = tag.getChild("selected", "selected");
+        assertEquals("sld", tag.getAttribute("value"));
     }
 
     @Test
@@ -432,6 +464,79 @@ public class StyleNewPageTest extends GeoServerWicketTestSupport {
 
         tester.assertRenderedPage(StyleNewPage.class);
         assertTrue(tester.getMessages(FeedbackMessage.ERROR).size() > 0);
+    }
+
+    @Test
+    public void testInsertImage() throws Exception {
+        // create some fake images
+        GeoServerDataDirectory dd =
+                GeoServerApplication.get().getBeanOfType(GeoServerDataDirectory.class);
+        dd.getStyles().get("somepicture.png").out().close();
+        dd.getStyles().get("otherpicture.jpg").out().close();
+        dd.getStyles().get("vector.svg").out().close();
+
+        // since we don't have code mirror available in the test environment, we are kind of limited
+        // we'll make the tool bar visible to test the dialog anyway
+        tester.getComponentFromLastRenderedPage(
+                        "styleForm:styleEditor:editorContainer:toolbar", false)
+                .setVisible(true);
+
+        tester.assertComponent(
+                "styleForm:styleEditor:editorContainer:toolbar:custom-buttons:1", AjaxLink.class);
+        tester.clickLink("styleForm:styleEditor:editorContainer:toolbar:custom-buttons:1");
+        tester.assertComponent(
+                "dialog:dialog:content:form:userPanel", AbstractStylePage.ChooseImagePanel.class);
+        tester.assertComponent("dialog:dialog:content:form:userPanel:image", DropDownChoice.class);
+        tester.assertInvisible("dialog:dialog:content:form:userPanel:display");
+        @SuppressWarnings("unchecked")
+        List<? extends String> choices =
+                ((DropDownChoice<String>)
+                                tester.getComponentFromLastRenderedPage(
+                                        "dialog:dialog:content:form:userPanel:image"))
+                        .getChoices();
+        assertEquals(4, choices.size());
+        assertEquals("otherpicture.jpg", choices.get(1));
+        assertEquals("somepicture.png", choices.get(2));
+        assertEquals("vector.svg", choices.get(3));
+
+        FormTester formTester = tester.newFormTester("dialog:dialog:content:form");
+        formTester.select("userPanel:image", 2);
+
+        tester.executeAjaxEvent("dialog:dialog:content:form:userPanel:image", "change");
+        tester.assertVisible("dialog:dialog:content:form:userPanel:display");
+
+        formTester.submit("submit");
+
+        // we can at least test that the right javascript code is there
+        Pattern pattern =
+                Pattern.compile(
+                        "replaceSelection\\('<ExternalGraphic "
+                                + "xmlns=\"http://www.opengis.net/sld\" "
+                                + "xmlns:xlink=\"http://www.w3.org/1999/xlink\">\\\\n"
+                                + "<OnlineResource xlink:type=\"simple\" xlink:href=\""
+                                + "(.*)\" />\\\\n"
+                                + "<Format>(.*)</Format>\\\\n"
+                                + "</ExternalGraphic>\\\\n'\\)");
+        Matcher matcher = pattern.matcher(tester.getLastResponse().getDocument());
+        assertTrue(matcher.find());
+        assertEquals("somepicture.png", matcher.group(1));
+        assertEquals("image/png", matcher.group(2));
+
+        // test uploading
+        tester.clickLink("styleForm:styleEditor:editorContainer:toolbar:custom-buttons:1");
+        formTester = tester.newFormTester("dialog:dialog:content:form");
+        org.apache.wicket.util.file.File file =
+                new org.apache.wicket.util.file.File(
+                        getClass().getResource("GeoServer_75.png").getFile());
+        formTester.setFile("userPanel:upload", file, "image/png");
+        formTester.submit("submit");
+
+        assertTrue(Resources.exists(dd.getStyles().get("GeoServer_75.png")));
+
+        matcher = pattern.matcher(tester.getLastResponse().getDocument());
+        assertTrue(matcher.find());
+        assertEquals("GeoServer_75.png", matcher.group(1));
+        assertEquals("image/png", matcher.group(2));
     }
 
     //    Cannot make this one to work, the sld text area is not filled in the test

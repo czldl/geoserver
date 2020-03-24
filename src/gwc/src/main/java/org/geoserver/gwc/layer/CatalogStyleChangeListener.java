@@ -126,8 +126,7 @@ public class CatalogStyleChangeListener implements CatalogListener {
         affectedLayers = mediator.getTileLayersForStyle(oldStyleName);
 
         for (GeoServerTileLayer tl : affectedLayers) {
-            LayerInfo layerInfo = tl.getLayerInfo();
-            if (layerInfo == null) {
+            if (!(tl.getPublishedInfo() instanceof LayerInfo)) {
                 // no extra styles for layer groups
                 continue;
             }
@@ -141,6 +140,7 @@ public class CatalogStyleChangeListener implements CatalogListener {
                 Set<String> newStyles = new HashSet<String>(styleNames);
                 newStyles.remove(oldStyleName);
                 newStyles.add(newStyleName);
+                LayerInfo layerInfo = (LayerInfo) tl.getPublishedInfo();
                 String defaultStyle =
                         layerInfo.getDefaultStyle() == null
                                 ? null
@@ -215,8 +215,6 @@ public class CatalogStyleChangeListener implements CatalogListener {
      *   <li>A {@link LayerGroupInfo} contains a layer using {@code modifiedStyle}
      *   <li>{@code modifiedStyle} is explicitly assigned to a {@link LayerGroupInfo}
      * </ul>
-     *
-     * @param modifiedStyle
      */
     private void handleStyleChange(final StyleInfo modifiedStyle) {
         final String styleName = modifiedStyle.prefixedName();

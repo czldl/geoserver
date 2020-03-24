@@ -340,9 +340,6 @@ public class PlacemarkStyleDecoratorFactory implements KmlDecoratorFactory {
         /**
          * Safe expression execution with default fallback.
          *
-         * @param expression
-         * @param feature
-         * @param defaultValue
          * @return evaluated value or defaultValue if unavailable
          */
         private Double evaluate(Expression expression, SimpleFeature feature, double defaultValue) {
@@ -358,9 +355,6 @@ public class PlacemarkStyleDecoratorFactory implements KmlDecoratorFactory {
         /**
          * Safe expression execution with default fallback.
          *
-         * @param expression
-         * @param feature
-         * @param defaultColor
          * @return evaluated value or defaultColor if unavailable
          */
         private Color evaluate(Expression expression, SimpleFeature feature, Color defaultColor) {
@@ -445,7 +439,7 @@ public class PlacemarkStyleDecoratorFactory implements KmlDecoratorFactory {
                 opacity = 1.0;
             }
             return new StringBuffer()
-                    .append(intToHex(new Float(255 * opacity).intValue()))
+                    .append(intToHex((int) (255 * opacity)))
                     .append(intToHex(c.getBlue()))
                     .append(intToHex(c.getGreen()))
                     .append(intToHex(c.getRed()))

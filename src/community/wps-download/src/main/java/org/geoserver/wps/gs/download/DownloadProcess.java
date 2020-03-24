@@ -21,6 +21,7 @@ import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.config.GeoServer;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resources;
+import org.geoserver.wps.gs.GeoServerProcess;
 import org.geoserver.wps.ppio.ZipArchivePPIO;
 import org.geoserver.wps.resource.WPSFileResource;
 import org.geoserver.wps.resource.WPSResourceManager;
@@ -29,7 +30,6 @@ import org.geotools.process.ProcessException;
 import org.geotools.process.factory.DescribeParameter;
 import org.geotools.process.factory.DescribeProcess;
 import org.geotools.process.factory.DescribeResult;
-import org.geotools.process.gs.GSProcess;
 import org.geotools.util.Utilities;
 import org.geotools.util.logging.Logging;
 import org.locationtech.jts.geom.Geometry;
@@ -54,7 +54,7 @@ import org.springframework.context.ApplicationContextAware;
     title = "Enterprise Download Process",
     description = "Downloads Layer Stream and provides a ZIP."
 )
-public class DownloadProcess implements GSProcess, ApplicationContextAware {
+public class DownloadProcess implements GeoServerProcess, ApplicationContextAware {
 
     /** The LOGGER. */
     private static final Logger LOGGER = Logging.getLogger(DownloadProcess.class);
@@ -73,7 +73,6 @@ public class DownloadProcess implements GSProcess, ApplicationContextAware {
      * Instantiates a new download process.
      *
      * @param geoServer the geo server
-     * @param sendMail the send mail
      * @param estimator the estimator
      * @param resourceManager the resourceManager to track resources to be cleaned up
      */
@@ -92,7 +91,6 @@ public class DownloadProcess implements GSProcess, ApplicationContextAware {
      *
      * @param layerName the layer name
      * @param filter the filter
-     * @param email the email
      * @param mimeType the output format
      * @param targetCRS the target crs
      * @param roiCRS the roi crs
@@ -103,6 +101,12 @@ public class DownloadProcess implements GSProcess, ApplicationContextAware {
      * @param targetSizeY the size of the target image along the Y axis
      * @param bandIndices the band indices selected for output, in case of raster input
      * @param writeParameters optional writing parameters
+     * @param minimizeReprojections When dealing with a Heterogeneous CRS mosaic, avoid
+     *     reprojections of the granules within the ROI, having their nativeCRS equal to the
+     *     targetCRS
+     * @param bestResolutionOnMatchingCRS When dealing with a Heterogeneous CRS mosaic, given a ROI
+     *     and a TargetCRS, with no target size being specified, get the best resolution of data
+     *     having nativeCrs matching the TargetCRS
      * @param progressListener the progress listener
      * @return the file
      * @throws ProcessException the process exception
@@ -174,6 +178,23 @@ public class DownloadProcess implements GSProcess, ApplicationContextAware {
                         min = 0
                     )
                     Parameters writeParameters,
+            @DescribeParameter(
+                        name = "minimizeReprojections",
+                        description =
+                                "When dealing with a Heterogeneous CRS mosaic, avoid reprojections of "
+                                        + "the granules within the ROI, having their nativeCRS equal to the targetCRS",
+                        min = 0
+                    )
+                    Boolean minimizeReprojections,
+            @DescribeParameter(
+                        name = "bestResolutionOnMatchingCRS",
+                        description =
+                                "When dealing with a Heterogeneous CRS mosaic given a ROI "
+                                        + "and a TargetCRS, with no target size being specified, get the best "
+                                        + " resolution of data having nativeCrs matching the TargetCRS",
+                        min = 0
+                    )
+                    Boolean bestResolutionOnMatchingCRS,
             final ProgressListener progressListener)
             throws ProcessException {
 
@@ -219,7 +240,19 @@ public class DownloadProcess implements GSProcess, ApplicationContextAware {
                         (Interpolation)
                                 ImageUtilities.NN_INTERPOLATION_HINT.get(JAI.KEY_INTERPOLATION);
             }
-
+            // Default behavior is false for backward compatibility
+            if (bestResolutionOnMatchingCRS == null) {
+                bestResolutionOnMatchingCRS = false;
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.log(Level.FINE, "best resolution on MatchingCRS is disabled");
+                }
+            }
+            if (minimizeReprojections == null) {
+                minimizeReprojections = false;
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.log(Level.FINE, "Minimize reprojections is disabled");
+                }
+            }
             //
             // do we respect limits?
             //
@@ -312,7 +345,9 @@ public class DownloadProcess implements GSProcess, ApplicationContextAware {
                                         targetSizeX,
                                         targetSizeY,
                                         bandIndices,
-                                        writeParameters);
+                                        writeParameters,
+                                        minimizeReprojections,
+                                        bestResolutionOnMatchingCRS);
             } else {
 
                 // wrong type

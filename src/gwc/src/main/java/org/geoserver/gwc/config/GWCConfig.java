@@ -102,7 +102,7 @@ public class GWCConfig implements Cloneable, Serializable {
         readResolve();
     }
 
-    private GWCConfig readResolve() {
+    protected Object readResolve() {
         if (null == version) {
             version = "0.0.1";
         }
@@ -414,8 +414,6 @@ public class GWCConfig implements Cloneable, Serializable {
     /**
      * Sets the name of the {@link LockProvider} Spring bean to be used as the lock provider for
      * this GWC instance
-     *
-     * @param lockProviderName
      */
     public void setLockProviderName(String lockProviderName) {
         this.lockProviderName = lockProviderName;

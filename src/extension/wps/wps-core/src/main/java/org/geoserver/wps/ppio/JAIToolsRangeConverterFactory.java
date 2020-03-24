@@ -53,11 +53,7 @@ public class JAIToolsRangeConverterFactory implements ConverterFactory {
         return null;
     }
 
-    /**
-     * Return the parsed Range.
-     *
-     * @param sRange
-     */
+    /** Return the parsed Range. */
     static Range<Double> parseRangeInternal(Matcher m, String sRange) {
         Double min = null;
         Double max = null;
@@ -68,10 +64,10 @@ public class JAIToolsRangeConverterFactory implements ConverterFactory {
         }
 
         if (m.group(2) != null) {
-            min = new Double(m.group(2));
+            min = Double.valueOf(m.group(2));
         }
         if (m.group(3) != null) {
-            max = new Double(m.group(3));
+            max = Double.valueOf(m.group(3));
         }
 
         boolean inclmin;
@@ -90,11 +86,7 @@ public class JAIToolsRangeConverterFactory implements ConverterFactory {
         return new Range<Double>(min, inclmin, max, inclmax);
     }
 
-    /**
-     * Parses a list of ranges from a string
-     *
-     * @param sRangeList
-     */
+    /** Parses a list of ranges from a string */
     public static List<Range<Double>> parseRanges(String sRangeList) {
         // check that the whole input string is a list of ranges
         Matcher m = RANGELIST_PATTERN.matcher(sRangeList);

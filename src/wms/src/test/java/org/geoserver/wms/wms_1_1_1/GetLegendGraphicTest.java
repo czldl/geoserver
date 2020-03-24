@@ -319,7 +319,7 @@ public class GetLegendGraphicTest extends WMSTestSupport {
                 "wms?LEGEND_OPTIONS=forceLabels:on&REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&WIDTH=200&HEIGHT=20&LAYER="
                         + getLayerId(MockData.POLYGONS)
                         + "&SLD_BODY=";
-        String sld = IOUtils.toString(TestData.class.getResource("externalEntities.sld"));
+        String sld = IOUtils.toString(TestData.class.getResource("externalEntities.sld"), "UTF-8");
         MockHttpServletResponse response =
                 getAsServletResponse(base + URLEncoder.encode(sld, "UTF-8"));
         // should fail with an error message poiting at entity resolution
@@ -381,5 +381,19 @@ public class GetLegendGraphicTest extends WMSTestSupport {
         BufferedImage expected = ImageIO.read(resource.file());
 
         assertEquals(getPixelColor(expected, 10, 2).getRGB(), getPixelColor(image, 10, 2).getRGB());
+    }
+
+    @Test
+    public void testJpegRasterLegend() throws Exception {
+        String base =
+                "wms?service=WMS&version=1.1.1&request=GetLegendGraphic"
+                        + "&layer=wcs:World&style=raster"
+                        + "&format=image/jpeg&width=32&height=32";
+
+        BufferedImage image = getAsImage(base, "image/jpeg");
+        BufferedImage expected =
+                ImageIO.read(getClass().getResourceAsStream("../rasterLegend.png"));
+
+        ImageAssert.assertEquals(expected, image, 0);
     }
 }

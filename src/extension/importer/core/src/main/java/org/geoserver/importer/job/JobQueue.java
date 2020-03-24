@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,8 +38,7 @@ public class JobQueue {
     ConcurrentHashMap<Long, Task<?>> jobs = new ConcurrentHashMap<Long, Task<?>>();
 
     /** job runner */
-    // ExecutorService pool = Executors.newCachedThreadPool();
-    ExecutorService pool =
+    ThreadPoolExecutor pool =
             new ThreadPoolExecutor(
                     0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()) {
                 protected <T extends Object> RunnableFuture<T> newTaskFor(Callable<T> callable) {
@@ -93,16 +91,19 @@ public class JobQueue {
                         }
 
                         final Importer importer = GeoServerExtensions.bean(Importer.class);
-                        for (File f : importer.getUploadRoot().listFiles()) {
-                            if (f.isDirectory() && new File(f, ".clean-me").exists()) {
-                                try {
-                                    IOUtils.delete(f);
-                                } catch (IOException e) {
-                                    LOGGER.log(
-                                            Level.WARNING,
-                                            "It was not possible to cleanup Importer temporary folder "
-                                                    + f,
-                                            e);
+                        File[] files = importer.getUploadRoot().listFiles();
+                        if (files != null) {
+                            for (File f : files) {
+                                if (f.isDirectory() && new File(f, ".clean-me").exists()) {
+                                    try {
+                                        IOUtils.delete(f);
+                                    } catch (IOException e) {
+                                        LOGGER.log(
+                                                Level.WARNING,
+                                                "It was not possible to cleanup Importer temporary folder "
+                                                        + f,
+                                                e);
+                                    }
                                 }
                             }
                         }
@@ -135,5 +136,13 @@ public class JobQueue {
     public void shutdown() {
         cleaner.shutdownNow();
         pool.shutdownNow();
+    }
+
+    public void setMaximumPoolSize(int maximumPoolSize) {
+        pool.setMaximumPoolSize(maximumPoolSize);
+    }
+
+    public int getMaximumPoolSize() {
+        return pool.getMaximumPoolSize();
     }
 }

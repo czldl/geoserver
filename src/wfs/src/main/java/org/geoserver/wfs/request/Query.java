@@ -40,6 +40,10 @@ public abstract class Query extends RequestObject {
         return eGet(adaptee, "srsName", URI.class);
     }
 
+    public void setSrsName(URI srs) {
+        eSet(adaptee, "srsName", srs);
+    }
+
     public String getFeatureVersion() {
         return eGet(adaptee, "featureVersion", String.class);
     }
@@ -104,6 +108,12 @@ public abstract class Query extends RequestObject {
         @Override
         public List<QName> getTypeNames() {
             return eGet(adaptee, "typeNames", List.class);
+        }
+
+        public void setTypeNames(List<QName> typeNames) {
+            List l = eGet(adaptee, "typeNames", List.class);
+            l.clear();
+            l.addAll(typeNames);
         }
 
         @Override

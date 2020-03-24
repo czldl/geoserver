@@ -110,8 +110,6 @@ class NetCDFCRSWriter {
     /**
      * Setup lat,lon dimension (or y,x) and related coordinates variable and add them to the
      * provided dimensionsManager
-     *
-     * @param dimensionsManager
      */
     public Map<String, NetCDFDimensionMapping> initialize2DCoordinatesDimensions() {
         final RenderedImage image = sampleGranule.getRenderedImage();
@@ -126,7 +124,7 @@ class NetCDFCRSWriter {
 
         // Get the proper type of axisCoordinates depending on
         // the type of CoordinateReferenceSystem
-        NetCDFCoordinate[] axisCoordinates = netcdfCrsType.getCoordinates();
+        NetCDFCoordinate[] axisCoordinates = netcdfCrsType.getCoordinates(crs);
 
         // Setup resolutions and bbox extrema to populate regularly gridded coordinate data
         // TODO: investigate whether we need to do some Y axis flipping
@@ -167,8 +165,6 @@ class NetCDFCRSWriter {
     /**
      * Add a coordinate variable to the dataset, along with the related dimension. Finally, add the
      * created dimension to the coordinates map
-     *
-     * @param dimensionsManager
      */
     private void addCoordinateVariable(
             NetCDFCoordinate netCDFCoordinate, int size, double min, double period) {
@@ -199,10 +195,7 @@ class NetCDFCRSWriter {
 
         // Set the coordinate values
         for (int pos = 0; pos < size; pos++) {
-            dimensionData.setFloat(
-                    index.set(pos),
-                    // new Float(ymax - (new Float(yPos).floatValue() * periodY)).floatValue());
-                    new Float(min + (new Float(pos).floatValue() * period)).floatValue());
+            dimensionData.setFloat(index.set(pos), (float) (min + (pos * period)));
         }
 
         // Add the dimension mapping to the coordinates dimensions
@@ -212,13 +205,7 @@ class NetCDFCRSWriter {
         coordinatesDimensions.put(dimensionName, dimensionMapper);
     }
 
-    /**
-     * Set the coordinate values for all the dimensions
-     *
-     * @param writer
-     * @throws IOException
-     * @throws InvalidRangeException
-     */
+    /** Set the coordinate values for all the dimensions */
     void setCoordinateVariable(NetCDFDimensionMapping manager)
             throws IOException, InvalidRangeException {
 
@@ -279,10 +266,6 @@ class NetCDFCRSWriter {
     /**
      * Add GeoReferencing information to the writer, starting from the CoordinateReferenceSystem and
      * the MathTransform
-     *
-     * @param writer
-     * @param crs
-     * @param transform
      */
     public void updateProjectionInformation(
             NetCDFCoordinateReferenceSystemType crsType,
@@ -405,10 +388,6 @@ class NetCDFCRSWriter {
     /**
      * Add GeoReferencing global attributes (GDAL's spatial_ref and GeoTransform). They will be used
      * for datasets with unsupported NetCDF CF projection.
-     *
-     * @param writer
-     * @param crs
-     * @param transform
      */
     private void addGlobalAttributes(
             NetcdfFileWriter writer, CoordinateReferenceSystem crs, MathTransform transform) {
@@ -416,15 +395,7 @@ class NetCDFCRSWriter {
         writer.addGroupAttribute(null, getGeoTransformAttribute(transform));
     }
 
-    /**
-     * Add the gridMapping attribute
-     *
-     * @param writer
-     * @param crs
-     * @param transform
-     * @param var
-     * @param gridMapping
-     */
+    /** Add the gridMapping attribute */
     private void setGeoreferencingAttributes(
             NetcdfFileWriter writer,
             CoordinateReferenceSystem crs,

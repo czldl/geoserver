@@ -699,6 +699,21 @@ background: url(../img/icons/silk/text_align_right.png) no-repeat;
 display: block;
 }
 
+.button-group .button-find span {
+background: url(../img/icons/silk/find.png) no-repeat;
+display: block;
+}
+
+.button-group .button-find-next span {
+background: url(../img/icons/silk/find_next.png) no-repeat;
+display: block;
+}
+
+.button-group .button-replace span {
+background: url(../img/icons/silk/text_replace.png) no-repeat;
+display: block;
+}
+
 .button-group .button-picture span {
 background: url(../img/icons/silk/photo.png) no-repeat;
 display: block;
@@ -1258,6 +1273,11 @@ display: block;
 margin-bottom: 1em;
 }
 
+.gwc-clear {
+background: transparent url(../img/clear_cache.png) scroll no-repeat left center;
+padding: 2px 0px 2px 20px;
+}
+
 /*----------------
   Page header
 -----------------*/
@@ -1341,6 +1361,8 @@ li.select2-results__option {
     /*Altered two below to make word wrap work */
     word-wrap: break-word !important;
     white-space: normal;
+    /* show empty option properly */
+    min-height:18px; 
 }
 
 .fullscreen {

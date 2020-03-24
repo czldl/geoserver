@@ -6,10 +6,8 @@
 
 package org.geoserver.security.file;
 
-import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.logging.Logger;
-import org.geoserver.platform.resource.Files;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resource.Type;
 import org.geoserver.platform.resource.ResourceListener;
@@ -60,26 +58,12 @@ public abstract class FileWatcher implements ResourceListener {
         }
     }
 
-    /**
-     * Use this method for stopping the thread
-     *
-     * @param terminated
-     */
+    /** Use this method for stopping the thread */
     public void setTerminate(boolean terminated) {
         resource.removeListener(this);
         synchronized (terminateLock) {
             this.terminate = terminated; // will ignore any last minuet events
         }
-    }
-
-    /**
-     * @param file
-     * @deprecated Use Resource instead of File
-     */
-    @Deprecated
-    protected FileWatcher(File file) {
-        this.resource = Files.asResource(file);
-        this.path = resource.path();
     }
 
     protected FileWatcher(Resource resource) {
@@ -90,17 +74,6 @@ public abstract class FileWatcher implements ResourceListener {
     /** Used to register FileWatcher as a resource notification listener. */
     public void start() {
         resource.addListener(this);
-    }
-
-    /**
-     * Set the delay to observe between each check of the file changes. Use values > 1000, most file
-     * systems have a time granularity of seconds
-     *
-     * @param delay
-     * @deprecated No longer used as resource notifications handle checking the file system
-     */
-    public void setDelay(long delay) {
-        // this.delay = delay;
     }
 
     @Override
@@ -174,7 +147,6 @@ public abstract class FileWatcher implements ResourceListener {
      * <p>This extra check is used in conjunction with {@link #setLastModified(long)} to allow the
      * FileWatcher to ignore an event that has been caused by a file update.
      *
-     * @param l
      * @return true if file was modified
      */
     public boolean testAndSetLastModified(long l) {
@@ -190,8 +162,6 @@ public abstract class FileWatcher implements ResourceListener {
     /**
      * Method intended to set last modified from a client which is up to date. This avoids
      * unnecessary reloads
-     *
-     * @param lastModified
      */
     public void setLastModified(long lastModified) {
         synchronized (lastModifiedLock) {

@@ -36,7 +36,6 @@ import org.apache.http.ssl.SSLContexts;
 import org.geoserver.ows.Dispatcher;
 import org.geoserver.ows.Request;
 import org.geoserver.ows.URLMangler.URLType;
-import org.geoserver.ows.util.RequestUtils;
 import org.geoserver.ows.util.ResponseUtils;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
@@ -331,12 +330,7 @@ public class XMPPClient extends RemoteProcessClient {
                 });
     }
 
-    /**
-     * Default Constructor
-     *
-     * @param remoteProcessFactoryConfigurationWatcher
-     * @param enabled
-     */
+    /** Default Constructor */
     public XMPPClient(
             RemoteProcessFactoryConfigurationWatcher remoteProcessFactoryConfigurationWatcher,
             boolean enabled,
@@ -584,7 +578,7 @@ public class XMPPClient extends RemoteProcessClient {
 
         try {
             if (baseURL == null) {
-                baseURL = RequestUtils.baseURL(request.getHttpRequest());
+                baseURL = ResponseUtils.baseURL(request.getHttpRequest());
             }
 
             baseURL = ResponseUtils.buildURL(baseURL, "/", null, URLType.SERVICE);
@@ -619,14 +613,22 @@ public class XMPPClient extends RemoteProcessClient {
                             + fixedInputs
                             + "]");
 
+            // Keep the request in charge. In the case the Remote Endpoint won't be able to execute
+            // this, it will be put on queue again
+            getExecutingRequests()
+                    .put(
+                            pid,
+                            new RemoteRequestDescriptor(
+                                    serviceName, input, metadata, pid, baseURL));
+
             sendMessage(serviceJID, msg);
         } else {
             /**
              * We could not find a suitable processing node to serve the request; queue it for later
              * checks...
              */
-            pendingRequests.add(
-                    new RemoteRequestDescriptor(serviceName, input, metadata, pid, baseURL));
+            getPendingRequests()
+                    .add(new RemoteRequestDescriptor(serviceName, input, metadata, pid, baseURL));
         }
 
         return pid;
@@ -635,9 +637,6 @@ public class XMPPClient extends RemoteProcessClient {
     /**
      * Utility method to extract the process inputs accordingly to whatever declared from the
      * endpoint.
-     *
-     * @param input
-     * @throws IOException
      */
     private Object getFixedInputs(Map<String, Object> input) throws IOException {
         Map<String, Object> fixedInputs = new HashMap<String, Object>();
@@ -684,9 +683,6 @@ public class XMPPClient extends RemoteProcessClient {
     /**
      * Logins as manager to the XMPP Server and registers to the service channels management chat
      * rooms
-     *
-     * @param username
-     * @param password
      */
     public void performLogin(String username, String password) throws Exception {
         if (connection != null && connection.isConnected()) {
@@ -732,21 +728,13 @@ public class XMPPClient extends RemoteProcessClient {
         }
     }
 
-    /**
-     * Generate the XMPP JID
-     *
-     * @param username
-     */
+    /** Generate the XMPP JID */
     private String getJID(String username) {
         // final String id = md5Java(username + "@" + this.domain + "/" + System.nanoTime());
         return username + "@" + this.domain;
     }
 
-    /**
-     * Generate a unique Server JID Resource
-     *
-     * @param username
-     */
+    /** Generate a unique Server JID Resource */
     private String getResource(String username) {
         final String id = md5Java(username + "@" + this.domain + "/" + System.nanoTime());
         try {
@@ -756,12 +744,7 @@ public class XMPPClient extends RemoteProcessClient {
         }
     }
 
-    /**
-     * Declare the status on the XMPP Chat
-     *
-     * @param available
-     * @param status
-     */
+    /** Declare the status on the XMPP Chat */
     public void setStatus(boolean available, String status) throws Exception {
         Presence.Type type = available ? Type.available : Type.unavailable;
         Presence presence = new Presence(type);
@@ -778,10 +761,7 @@ public class XMPPClient extends RemoteProcessClient {
         }
     }
 
-    /**
-     * @param user
-     * @param name
-     */
+    /** */
     public void createEntry(String user, String name) throws Exception {
         LOGGER.fine(String.format("Creating entry for buddy '%1$s' with name %2$s", user, name));
         Roster roster = connection.getRoster();
@@ -841,20 +821,12 @@ public class XMPPClient extends RemoteProcessClient {
         }
     }
 
-    /**
-     * Close the XMPP connection
-     *
-     * @throws NotConnectedException
-     */
+    /** Close the XMPP connection */
     public void disconnect() throws NotConnectedException {
         connection.disconnect();
     }
 
-    /**
-     * Utility method to extract the Service Name from the XMPP JID
-     *
-     * @param person
-     */
+    /** Utility method to extract the Service Name from the XMPP JID */
     public static NameImpl extractServiceName(String person) throws Exception {
         String occupantFlatName = null;
         if (person.lastIndexOf("@") < person.indexOf("/")) {
@@ -896,11 +868,7 @@ public class XMPPClient extends RemoteProcessClient {
         }
     }
 
-    /**
-     * Scan Remote Processing Machines availability and average load
-     *
-     * @throws Exception
-     */
+    /** Scan Remote Processing Machines availability and average load */
     protected void getEndpointsLoadAverages() throws Exception {
         synchronized (registeredProcessingMachines) {
             List<String> nodeJIDs = new ArrayList<String>();
@@ -932,12 +900,10 @@ public class XMPPClient extends RemoteProcessClient {
     /**
      * Scan pending requests queue; try to find a free remote node suitable for processing or abort
      * the request if expired.
-     *
-     * @throws Exception
      */
     protected void checkPendingRequests() throws Exception {
-        synchronized (pendingRequests) {
-            for (RemoteRequestDescriptor request : pendingRequests) {
+        synchronized (getPendingRequests()) {
+            for (RemoteRequestDescriptor request : getPendingRequests()) {
                 // Check if the request is still valid
                 final String pid = request.getPid();
                 boolean isRequestValid = false;
@@ -952,7 +918,7 @@ public class XMPPClient extends RemoteProcessClient {
 
                 if (!isRequestValid) {
                     // Remove the request from the queue
-                    pendingRequests.remove(request);
+                    getPendingRequests().remove(request);
                     continue;
                 }
 
@@ -981,6 +947,8 @@ public class XMPPClient extends RemoteProcessClient {
                      * We have a JID to an available processing node; send the request message to
                      * it...
                      */
+                    // Remove the request from the queue
+                    getPendingRequests().remove(request);
 
                     // Update Metadata
                     request.getMetadata().put("serviceJID", serviceJID);
@@ -992,10 +960,12 @@ public class XMPPClient extends RemoteProcessClient {
                                     + fixedInputs
                                     + "]");
 
+                    // Keep the request in charge. In the case the Remote Endpoint won't be able to
+                    // execute this, it will be put on queue again
+                    getExecutingRequests().put(pid, request);
+
                     sendMessage(serviceJID, msg);
 
-                    // Remove the request from the queue
-                    pendingRequests.remove(request);
                     continue;
                 } else {
                     blockedProcess.setTask(pid, "Blocked: no resources available for execution!");
@@ -1008,8 +978,6 @@ public class XMPPClient extends RemoteProcessClient {
     /**
      * A new member joined one of the service chat-rooms; send an invitation and see if it is a
      * remote service. If so, register it
-     *
-     * @param p
      */
     protected void handleMemberJoin(Presence p) throws Exception {
         synchronized (registeredServices) {
@@ -1034,8 +1002,6 @@ public class XMPPClient extends RemoteProcessClient {
     /**
      * A member leaved one of the service chat-rooms; lets remove the service declaration and
      * de-register it
-     *
-     * @param p
      */
     protected void handleMemberLeave(Packet p) throws Exception {
         final Name serviceName = extractServiceName(p.getFrom());
@@ -1057,8 +1023,6 @@ public class XMPPClient extends RemoteProcessClient {
      * <p>e.g. debug.foo@bar/service@localhost
      *
      * @param service name
-     * @param candidateServiceJID
-     * @throws Exception
      */
     private String getFlattestMachine(Name serviceName) throws Exception {
         // The candidate remote processing node
@@ -1306,10 +1270,6 @@ public class XMPPClient extends RemoteProcessClient {
 
     /**
      * Utility method to "pickle" (compress) the input parameters to be attached to the XMPP message
-     *
-     * @param unpickled
-     * @throws PickleException
-     * @throws IOException
      */
     static byte[] pickle(Object unpickled) throws PickleException, IOException {
         Pickler p = new Pickler();
@@ -1318,10 +1278,6 @@ public class XMPPClient extends RemoteProcessClient {
 
     /**
      * Utility method to "un-pickle" (decompress) the input parameters attached to the XMPP message
-     *
-     * @param strdata
-     * @throws PickleException
-     * @throws IOException
      */
     static Object unPickle(String strdata) throws PickleException, IOException {
         return unPickle(PickleUtils.str2bytes(strdata));
@@ -1329,10 +1285,6 @@ public class XMPPClient extends RemoteProcessClient {
 
     /**
      * Utility method to "un-pickle" (decompress) the input parameters attached to the XMPP message
-     *
-     * @param data
-     * @throws PickleException
-     * @throws IOException
      */
     static Object unPickle(byte[] data) throws PickleException, IOException {
         Unpickler u = new Unpickler();
@@ -1341,12 +1293,7 @@ public class XMPPClient extends RemoteProcessClient {
         return o;
     }
 
-    /**
-     * Utility method to get bytes out of a String
-     *
-     * @param s
-     * @throws IOException
-     */
+    /** Utility method to get bytes out of a String */
     static byte[] toBytes(String s) throws IOException {
         try {
             byte[] bytes = PickleUtils.str2bytes(s);
@@ -1362,11 +1309,7 @@ public class XMPPClient extends RemoteProcessClient {
         }
     }
 
-    /**
-     * Utility method to get bytes out of a short array
-     *
-     * @param shorts
-     */
+    /** Utility method to get bytes out of a short array */
     static byte[] toBytes(short[] shorts) {
         byte[] result = new byte[shorts.length + 3];
         result[0] = (byte) Opcodes.PROTO;
@@ -1378,11 +1321,7 @@ public class XMPPClient extends RemoteProcessClient {
         return result;
     }
 
-    /**
-     * Utility method to generate a unique md5
-     *
-     * @param message
-     */
+    /** Utility method to generate a unique md5 */
     public static String md5Java(String message) {
         String digest = null;
         try {
@@ -1474,8 +1413,6 @@ public class XMPPClient extends RemoteProcessClient {
      *
      * @param name Name of class
      * @param cl ClassLoader to use
-     * @param object
-     * @param sample
      * @return The class for the given name
      * @throws ClassNotFoundException When the class could not be found by the specified ClassLoader
      */
@@ -1687,10 +1624,7 @@ class ParameterTemplate {
 
     private final Map<String, String> meta = new HashMap<String, String>();
 
-    /**
-     * @param clazz
-     * @param defaultValue
-     */
+    /** */
     public ParameterTemplate(Class<?> clazz, Object defaultValue, String mimeTypes) {
         this.clazz = clazz;
         this.defaultValue = defaultValue;

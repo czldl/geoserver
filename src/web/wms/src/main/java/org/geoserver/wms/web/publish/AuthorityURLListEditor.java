@@ -48,14 +48,13 @@ public class AuthorityURLListEditor extends FormComponentPanel<List<AuthorityURL
     private WebMarkupContainer table;
 
     /**
-     * @param id
      * @see WMSInfo#getAuthorityURLs()
      * @see LayerInfo#getAuthorityURLs()
      * @see LayerGroupInfo#getAuthorityURLs()
      */
     public AuthorityURLListEditor(final String id, final IModel<List<AuthorityURLInfo>> list) {
         super(id, list);
-        Assert.notNull(list.getObject());
+        Assert.notNull(list.getObject(), "The list cannot be null");
 
         // container for ajax updates
         final WebMarkupContainer container = new WebMarkupContainer("container");

@@ -5,6 +5,7 @@
  */
 package org.geoserver.wms.featureinfo;
 
+import it.geosolutions.jaiext.range.Range;
 import java.awt.Rectangle;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.RenderedImage;
@@ -24,6 +25,7 @@ import org.geoserver.wms.FeatureInfoRequestParameters;
 import org.geoserver.wms.GetMapRequest;
 import org.geoserver.wms.MapLayerInfo;
 import org.geoserver.wms.WMS;
+import org.geoserver.wms.clip.CroppedGridCoverage2DReader;
 import org.geotools.coverage.GridSampleDimension;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridEnvelope2D;
@@ -40,6 +42,7 @@ import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
 import org.geotools.geometry.DirectPosition2D;
 import org.geotools.geometry.TransformedDirectPosition;
 import org.geotools.geometry.util.XRectangle2D;
+import org.geotools.image.ImageWorker;
 import org.geotools.image.util.ImageUtilities;
 import org.geotools.ows.ServiceException;
 import org.geotools.parameter.Parameter;
@@ -48,6 +51,7 @@ import org.geotools.util.factory.GeoTools;
 import org.geotools.util.factory.Hints;
 import org.geotools.util.logging.Logging;
 import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Geometry;
 import org.opengis.coverage.CannotEvaluateException;
 import org.opengis.coverage.PointOutsideCoverageException;
 import org.opengis.coverage.grid.GridEnvelope;
@@ -69,7 +73,7 @@ import org.opengis.referencing.operation.TransformException;
  *
  * @author Andrea Aime - GeoSolutions
  */
-public class RasterLayerIdentifier implements LayerIdentifier {
+public class RasterLayerIdentifier implements LayerIdentifier<GridCoverage2DReader> {
 
     static final Logger LOGGER = Logging.getLogger(RasterLayerIdentifier.class);
 
@@ -91,9 +95,11 @@ public class RasterLayerIdentifier implements LayerIdentifier {
         final SortBy[] sort = params.getSort();
         final CoverageInfo cinfo = layer.getCoverage();
         final GridCoverage2DReader reader =
-                (GridCoverage2DReader)
-                        cinfo.getGridCoverageReader(
-                                new NullProgressListener(), GeoTools.getDefaultHints());
+                handleClipParam(
+                        params,
+                        (GridCoverage2DReader)
+                                cinfo.getGridCoverageReader(
+                                        new NullProgressListener(), GeoTools.getDefaultHints()));
 
         // set the requested position in model space for this request
         final Coordinate middle =
@@ -284,6 +290,14 @@ public class RasterLayerIdentifier implements LayerIdentifier {
         FeatureCollection pixel = null;
         try {
             final double[] pixelValues = coverage.evaluate(position, (double[]) null);
+            if (params.isExcludeNodataResults() && pixelsAreNodata(coverage, pixelValues)) {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Returning no result due to nodata pixel");
+                }
+                for (int i = 0; i < pixelValues.length; i++) {
+                    pixelValues[i] = Double.NaN;
+                }
+            }
             pixel = wrapPixelInFeatureCollection(coverage, pixelValues, cinfo.getQualifiedName());
         } catch (PointOutsideCoverageException e) {
             // it's fine, users might legitimately query point outside, we just don't
@@ -296,6 +310,21 @@ public class RasterLayerIdentifier implements LayerIdentifier {
             }
         }
         return Collections.singletonList(pixel);
+    }
+
+    private boolean pixelsAreNodata(GridCoverage2D coverage, final double values[]) {
+        RenderedImage ri = coverage.getRenderedImage();
+        ImageWorker worker = new ImageWorker(ri);
+        Range nodata = worker.getNoData();
+        int nodataValues = 0;
+        if (nodata != null) {
+            for (double value : values) {
+                if (nodata.contains(value)) {
+                    nodataValues++;
+                }
+            }
+        }
+        return nodataValues == values.length;
     }
 
     private SimpleFeatureCollection wrapPixelInFeatureCollection(
@@ -322,7 +351,7 @@ public class RasterLayerIdentifier implements LayerIdentifier {
 
         Double[] values = new Double[pixelValues.length];
         for (int i = 0; i < values.length; i++) {
-            values[i] = new Double(pixelValues[i]);
+            values[i] = Double.valueOf(pixelValues[i]);
         }
         return DataUtilities.collection(SimpleFeatureBuilder.build(gridType, values, ""));
     }
@@ -349,5 +378,13 @@ public class RasterLayerIdentifier implements LayerIdentifier {
             }
             return new String(result);
         }
+    }
+
+    @Override
+    public GridCoverage2DReader handleClipParam(
+            FeatureInfoRequestParameters params, GridCoverage2DReader reader) {
+        Geometry roiGeom = params.getGetMapRequest().getClip();
+        if (roiGeom == null) return reader;
+        return new CroppedGridCoverage2DReader(reader, roiGeom);
     }
 }

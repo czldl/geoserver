@@ -52,11 +52,11 @@ public class WfsXmlReader extends XmlRequestReader {
     }
 
     public Object read(Object request, Reader reader, Map kvp) throws Exception {
-        // TODO: make this configurable?
-        configuration.getProperties().add(Parser.Properties.PARSE_UNKNOWN_ELEMENTS);
-
         Parser parser = new Parser(configuration);
+        parser.setStrict(false);
         parser.setEntityResolver(entityResolverProvider.getEntityResolver());
+        // set entity expansion limit
+        parser.setEntityExpansionLimit(WFSXmlUtils.getEntityExpansionLimitConfiguration());
 
         WFSXmlUtils.initRequestParser(parser, wfs, geoServer, kvp);
         Object parsed = WFSXmlUtils.parseRequest(parser, reader, wfs);

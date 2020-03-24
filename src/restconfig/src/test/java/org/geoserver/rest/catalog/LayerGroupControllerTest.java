@@ -31,6 +31,7 @@ import org.geotools.referencing.CRS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.junit.Before;
 import org.junit.Test;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.w3c.dom.Document;
 
@@ -429,6 +430,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         assertNotNull(response.getHeader("Location"));
         assertTrue(response.getHeader("Location").endsWith("/layergroups/newLayerGroup"));
@@ -456,6 +458,8 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         // check that the keywords were correctly added
         assertThat(lg.getKeywords().size(), is(2));
         assertThat(lg.getKeywords(), containsInAnyOrder(keyword1, keyword2));
+        // creation date
+        assertNotNull(lg.getDateCreated());
     }
 
     @Test
@@ -480,6 +484,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         assertNotNull(response.getHeader("Location"));
         assertTrue(
@@ -531,6 +536,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         assertNotNull(response.getHeader("Location"));
         assertTrue(response.getHeader("Location").endsWith("/layergroups/nestedLayerGroupTest"));
@@ -569,6 +575,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         LayerGroupInfo lg = catalog.getLayerGroupByName("newLayerGroupWithTypeCONTAINER");
         assertNotNull(lg);
@@ -595,6 +602,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         LayerGroupInfo lg = catalog.getLayerGroupByName("newLayerGroupWithTypeEO");
         assertNotNull(lg);
@@ -619,6 +627,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         LayerGroupInfo lg = catalog.getLayerGroupByName("newLayerGroup");
         assertNotNull(lg);
@@ -650,6 +659,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
                 postAsServletResponse(
                         RestBaseController.ROOT_PATH + "/workspaces/sf/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
         assertNotNull(cat.getLayerGroupByName("sf", "workspaceLayerGroup"));
     }
 
@@ -698,6 +708,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         assertEquals(101, lg.getAttribution().getLogoWidth());
         assertEquals(102, lg.getAttribution().getLogoHeight());
         assertEquals(2, lg.getMetadataLinks().size());
+        assertNotNull(lg.getDateModified());
     }
 
     @Test
@@ -825,6 +836,7 @@ public class LayerGroupControllerTest extends CatalogRESTTestSupport {
         MockHttpServletResponse response =
                 postAsServletResponse(RestBaseController.ROOT_PATH + "/layergroups", xml);
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
 
         // Verify the new layer group in the catalog
         LayerGroupInfo lg = catalog.getLayerGroupByName("doubleLayerGroup");

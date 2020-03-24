@@ -20,7 +20,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
-import java.util.zip.GZIPOutputStream;
 import javax.xml.transform.TransformerException;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.FeatureTypeInfo;
@@ -128,7 +127,7 @@ public class GML2OutputFormat extends WFSGetFeatureOutputFormat {
 
             if (ftNamespaces.containsKey(uri)) {
                 String location = (String) ftNamespaces.get(uri);
-                ftNamespaces.put(uri, location + "," + urlEncode(meta.getPrefixedName()));
+                ftNamespaces.put(uri, location + "," + urlEncode(meta.prefixedName()));
             } else {
                 // don't blindly assume it's a feature type, this class is used also by WMS
                 // FeatureInfo
@@ -231,8 +230,6 @@ public class GML2OutputFormat extends WFSGetFeatureOutputFormat {
                     "It seems prepare() has not been called" + " or has not succeed");
         }
 
-        GZIPOutputStream gzipOut = null;
-
         // execute should of set all the header information
         // including the lockID
         //
@@ -244,13 +241,6 @@ public class GML2OutputFormat extends WFSGetFeatureOutputFormat {
 
         try {
             transformer.transform(featureResults, output);
-
-            // we need to "finish" here because if not,it is possible that the gzipped
-            // content do not gets completely written
-            if (gzipOut != null) {
-                gzipOut.finish();
-                gzipOut.flush();
-            }
         } catch (TransformerException gmlException) {
             String msg = " error:" + gmlException.getMessage();
             throw new ServiceException(msg, gmlException);
@@ -289,7 +279,7 @@ public class GML2OutputFormat extends WFSGetFeatureOutputFormat {
                         "request",
                         "DescribeFeatureType",
                         "typeName",
-                        meta.getPrefixedName());
+                        meta.prefixedName());
         return buildURL(baseUrl, "wfs", params, URLType.SERVICE);
     }
 }

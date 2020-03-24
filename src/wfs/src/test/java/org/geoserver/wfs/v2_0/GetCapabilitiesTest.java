@@ -163,11 +163,7 @@ public class GetCapabilitiesTest extends WFS20TestSupport {
         assertEquals(s1, s2);
     }
 
-    /**
-     * Minimum compliance for the resolve parameter
-     *
-     * @throws Exception
-     */
+    /** Minimum compliance for the resolve parameter */
     @Test
     public void testResolveParameter() throws Exception {
         Document doc = getAsDOM("wfs?service=WFS&request=getCapabilities&version=2.0.0");
@@ -275,7 +271,7 @@ public class GetCapabilitiesTest extends WFS20TestSupport {
         for (Iterator<FeatureTypeInfo> it = enabledTypes.iterator(); it.hasNext(); ) {
             FeatureTypeInfo ft = it.next();
             if (ft.isEnabled()) {
-                String prefixedName = ft.getPrefixedName();
+                String prefixedName = ft.prefixedName();
 
                 String xpathExpr =
                         "/wfs:WFS_Capabilities/wfs:FeatureTypeList/"

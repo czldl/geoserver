@@ -74,7 +74,7 @@ public class WFSURIHandler extends URIHandlerImpl {
                 LOGGER.log(Level.WARNING, "Unable to determine network interface info", ex);
             }
 
-            return Collections.list(e);
+            return e != null ? Collections.list(e) : Collections.emptyList();
         }
     }
 
@@ -184,7 +184,7 @@ public class WFSURIHandler extends URIHandlerImpl {
         // of the DFT request will likely fail, falling back to default behavior
 
         // first check the proxy uri if there is one
-        String proxyBaseUrl = geoServer.getGlobal().getProxyBaseUrl();
+        String proxyBaseUrl = geoServer.getGlobal().getSettings().getProxyBaseUrl();
         if (proxyBaseUrl != null) {
             try {
                 URI proxyBaseUri = URI.createURI(proxyBaseUrl);

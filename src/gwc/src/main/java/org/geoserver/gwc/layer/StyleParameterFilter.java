@@ -15,6 +15,7 @@ import com.thoughtworks.xstream.annotations.XStreamAlias;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -54,6 +55,21 @@ public class StyleParameterFilter extends ParameterFilter {
 
     public StyleParameterFilter() {
         super("STYLES");
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getKey(), this.allowedStyles);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof StyleParameterFilter)) {
+            return false;
+        }
+        StyleParameterFilter s = (StyleParameterFilter) o;
+        return Objects.equals(getKey(), s.getKey())
+                && Objects.equals(allowedStyles, s.allowedStyles);
     }
 
     @Override
@@ -128,10 +144,7 @@ public class StyleParameterFilter extends ParameterFilter {
         return super.getDefaultValue();
     }
 
-    /**
-     * @see StyleParameterFilter#setDefaultValue(String)
-     * @param s
-     */
+    /** @see StyleParameterFilter#setDefaultValue(String) */
     public void setRealDefault(String s) {
         // Just use the regular set method
         setDefaultValue(s);
@@ -176,11 +189,7 @@ public class StyleParameterFilter extends ParameterFilter {
         return finalStyles;
     }
 
-    /**
-     * Set/update the availableStyles and defaultStyle based on the given GeoServer layer.
-     *
-     * @param layer
-     */
+    /** Set/update the availableStyles and defaultStyle based on the given GeoServer layer. */
     public void setLayer(LayerInfo layer) {
         availableStyles = new TreeSet<String>();
 
@@ -205,11 +214,7 @@ public class StyleParameterFilter extends ParameterFilter {
         return Collections.unmodifiableSet(allowedStyles);
     }
 
-    /**
-     * Set the allowed styles. {@code null} to allow all styles available on the layer.
-     *
-     * @param styles
-     */
+    /** Set the allowed styles. {@code null} to allow all styles available on the layer. */
     public void setStyles(@Nullable Set<String> styles) {
         if (styles == null) {
             this.allowedStyles = null;
@@ -219,7 +224,7 @@ public class StyleParameterFilter extends ParameterFilter {
     }
 
     @Override
-    protected ParameterFilter readResolve() {
+    protected Object readResolve() {
         super.readResolve();
         Preconditions.checkState(
                 this.getKey().equalsIgnoreCase("STYLES"),

@@ -96,14 +96,6 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
     private long maxShpSize = Long.getLong("GS_SHP_MAX_SIZE", Integer.MAX_VALUE);
     private long maxDbfSize = Long.getLong("GS_DBF_MAX_SIZE", Integer.MAX_VALUE);
 
-    /** @deprecated use {@link #ShapeZipOutputFormat(GeoServer)} */
-    public ShapeZipOutputFormat() {
-        this(
-                GeoServerExtensions.bean(GeoServer.class),
-                (Catalog) GeoServerExtensions.bean("catalog"),
-                (GeoServerResourceLoader) GeoServerExtensions.bean("resourceLoader"));
-    }
-
     public ShapeZipOutputFormat(
             GeoServer gs, Catalog catalog, GeoServerResourceLoader resourceLoader) {
         super(gs, "SHAPE-ZIP");
@@ -267,11 +259,7 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
         }
     }
 
-    /**
-     * Dumps the request
-     *
-     * @param simpleFeatureCollection
-     */
+    /** Dumps the request */
     private void createRequestDump(
             File tempDir, GetFeatureRequest gft, SimpleFeatureCollection fc) {
         final Request request = Dispatcher.REQUEST.get();
@@ -295,7 +283,7 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
                 StringBuilder url = new StringBuilder();
                 String parameters = httpRequest.getQueryString();
                 url.append(mangledUrl).append("?").append(parameters);
-                FileUtils.writeStringToFile(target, url.toString());
+                FileUtils.writeStringToFile(target, url.toString(), "UTF-8");
             } else {
                 org.geotools.xsd.Configuration cfg = null;
                 QName elementName = null;
@@ -330,15 +318,13 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
                     "The query result is empty, and the geometric type of the features is unknwon:"
                             + "an empty point shapefile has been created to fill the zip file");
         } finally {
-            pw.close();
+            if (pw != null) pw.close();
         }
     }
 
     /**
      * Either retrieves the corresponding FeatureTypeInfo from the catalog or fakes one with the
      * necessary information
-     *
-     * @param c
      */
     private FeatureTypeInfo getFeatureTypeInfo(SimpleFeatureType schema) {
         FeatureTypeInfo ftInfo = catalog.getFeatureTypeByName(schema.getName());
@@ -407,12 +393,8 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
 
         if (file.getType() == Type.RESOURCE) {
             Properties properties = new Properties();
-            InputStream fis = null;
-            try {
-                fis = file.in();
+            try (InputStream fis = file.in()) {
                 properties.load(fis);
-            } finally {
-                org.apache.commons.io.IOUtils.closeQuietly(fis);
             }
 
             String data = (String) properties.get(epsgCode.toString());
@@ -442,7 +424,6 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
     /**
      * Looks up the charset parameter, either in the GetFeature request or as a global parameter
      *
-     * @param getFeature
      * @return the found charset, or the platform's default one if none was specified
      */
     private Charset getShapefileCharset(Operation getFeature) {
@@ -483,7 +464,7 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
         this.maxDbfSize = maxDbfSize;
     }
 
-    static class FileNameSource {
+    class FileNameSource {
 
         private Class clazz;
 
@@ -494,7 +475,8 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
         private Properties processTemplate(FeatureTypeInfo ftInfo, String geometryType) {
             try {
                 // setup template subsystem
-                GeoServerTemplateLoader templateLoader = new GeoServerTemplateLoader(clazz);
+                GeoServerTemplateLoader templateLoader =
+                        new GeoServerTemplateLoader(clazz, resourceLoader);
                 templateLoader.setFeatureType(ftInfo);
 
                 // load the template

@@ -5,34 +5,37 @@
  */
 package org.vfny.geoserver.util;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletContext;
-import org.geoserver.catalog.ResourcePool;
+import java.util.stream.Collectors;
+import org.geoserver.catalog.FeatureTypeInfo;
+import org.geoserver.catalog.ResourceInfo;
+import org.geoserver.catalog.WMSLayerInfo;
 import org.geoserver.data.DataAccessFactoryProducer;
 import org.geoserver.data.DataStoreFactoryInitializer;
-import org.geoserver.feature.FeatureSourceUtils;
 import org.geoserver.feature.retype.RetypingDataStore;
 import org.geoserver.platform.GeoServerExtensions;
-import org.geoserver.platform.GeoServerResourceLoader;
 import org.geotools.data.DataAccess;
 import org.geotools.data.DataAccessFactory;
 import org.geotools.data.DataAccessFactory.Param;
 import org.geotools.data.DataAccessFinder;
 import org.geotools.data.DataStore;
-import org.geotools.data.FeatureSource;
+import org.geotools.data.util.NullProgressListener;
+import org.geotools.feature.NameImpl;
+import org.geotools.ows.wms.Layer;
 import org.geotools.util.logging.Logging;
-import org.locationtech.jts.geom.Envelope;
 import org.opengis.feature.Feature;
 import org.opengis.feature.type.FeatureType;
+import org.opengis.feature.type.Name;
 
 /**
  * A collecitno of utilties for dealing with GeotTools DataStore.
@@ -47,28 +50,9 @@ public abstract class DataStoreUtils {
     static Logger LOGGER = Logging.getLogger("org.geoserver.data");
 
     /**
-     * Looks up the datastore using the given params, verbatim, and then eventually wraps it into a
-     * renaming wrapper so that feature type names are good ones from the wfs point of view (that
-     * is, no ":" in the type names)
-     *
-     * @param params
-     * @deprecated use {@link #getDataAccess(Map)}
-     */
-    public static DataStore getDataStore(Map params) throws IOException {
-        DataAccess<? extends FeatureType, ? extends Feature> store;
-        store = getDataAccess(params);
-        if (!(store instanceof DataStore)) {
-            return null;
-        }
-        return (DataStore) store;
-    }
-
-    /**
      * Looks up the {@link DataAccess} using the given params, verbatim, and then eventually wraps
      * it into a renaming wrapper so that feature type names are good ones from the wfs point of
      * view (that is, no ":" in the type names)
-     *
-     * @param params
      */
     public static DataAccess<? extends FeatureType, ? extends Feature> getDataAccess(Map params)
             throws IOException {
@@ -99,44 +83,9 @@ public abstract class DataStoreUtils {
     }
 
     /**
-     * processed parameters with relative URLs resolved against data directory.
-     *
-     * @param m
-     * @return processed parameters with relative URLs resolved against data directory
-     * @deprecated Unused, call {@link ResourcePool#getParams(Map, GeoServerResourceLoader)}
-     *     directly.
-     */
-    public static <K, V> Map<K, V> getParams(Map<K, V> m) {
-        return getParams(m, null);
-    }
-
-    /**
-     * processed parameters with relative URLs resolved against data directory.
-     *
-     * @param m
-     * @param sc Context used to create GeoServerResourceLoader if required
-     * @return processed parameters with relative URLs resolved against data directory
-     * @deprecated Unused, call {@link ResourcePool#getParams(Map, GeoServerResourceLoader)}
-     *     directly.
-     */
-    public static <K, V> Map<K, V> getParams(Map<K, V> m, ServletContext sc) {
-        GeoServerResourceLoader loader;
-        if (sc != null) {
-            String basePath = GeoServerResourceLoader.lookupGeoServerDataDirectory(sc);
-            File baseDir = new File(basePath);
-            loader = new GeoServerResourceLoader(baseDir);
-        } else {
-            loader = GeoServerExtensions.bean(GeoServerResourceLoader.class);
-        }
-        return ResourcePool.getParams(m, loader);
-    }
-
-    /**
      * When loading from DTO use the params to locate factory.
      *
      * <p>bleck
-     *
-     * @param params
      */
     public static DataAccessFactory aquireFactory(Map params) {
         for (Iterator i = getAvailableDataStoreFactories().iterator(); i.hasNext(); ) {
@@ -160,8 +109,6 @@ public abstract class DataStoreUtils {
      *   <li>List of Params (attrb name, help text)
      *   <li>Checking user's input with factory.canProcess( params )
      * </ul>
-     *
-     * @param diplayName
      */
     public static DataAccessFactory aquireFactory(String displayName) {
         if (displayName == null) {
@@ -276,8 +223,6 @@ public abstract class DataStoreUtils {
      *
      * <p>The resulting map should still be checked with factory.acceptsMap( map )
      *
-     * @param factory
-     * @param params
      * @return Map with real values that may be acceptable to Factory
      */
     public static Map toConnectionParams(DataAccessFactory factory, Map params) throws IOException {
@@ -297,15 +242,6 @@ public abstract class DataStoreUtils {
         }
 
         return map;
-    }
-
-    /**
-     * @deprecated use {@link
-     *     org.geoserver.feature.FeatureSourceUtils#getBoundingBoxEnvelope(FeatureSource)}
-     */
-    public static Envelope getBoundingBoxEnvelope(
-            FeatureSource<? extends FeatureType, ? extends Feature> fs) throws IOException {
-        return FeatureSourceUtils.getBoundingBoxEnvelope(fs);
     }
 
     public static Collection<DataAccessFactory> getAvailableDataStoreFactories() {
@@ -328,5 +264,60 @@ public abstract class DataStoreUtils {
         }
 
         return factories;
+    }
+
+    // A utility method for retreiving supported SRS on WFS-NG resource
+    public static List<String> getOtherSRSFromWfsNg(ResourceInfo resourceInfo) {
+        // do nothing when
+        if (resourceInfo.getStore().getType() == null) return Collections.EMPTY_LIST;
+        else if (!resourceInfo.getStore().getType().equalsIgnoreCase("Web Feature Server (NG)"))
+            return Collections.EMPTY_LIST;
+        try {
+            // featureType.
+            FeatureTypeInfo featureType = (FeatureTypeInfo) resourceInfo;
+            Name nativeName = new NameImpl(featureType.getNativeName());
+
+            org.geotools.data.wfs.internal.FeatureTypeInfo info =
+                    (org.geotools.data.wfs.internal.FeatureTypeInfo)
+                            featureType
+                                    .getStore()
+                                    .getDataStore(null)
+                                    .getFeatureSource(nativeName)
+                                    .getInfo();
+            // read all identifiers of this CRS into a an comma seperated string
+            if (info.getOtherSRS() != null) {
+                return info.getOtherSRS();
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+        }
+
+        return Collections.EMPTY_LIST;
+    }
+
+    // A utility method for retreiving supported SRS on WMSLayerInfo resource
+    public static List<String> getOtherSRSFromWMSStore(ResourceInfo resource) {
+        if (!(resource instanceof WMSLayerInfo)) return Collections.EMPTY_LIST;
+
+        WMSLayerInfo wmsLayerInfo = (WMSLayerInfo) resource;
+        try {
+
+            Layer wmsLayer = wmsLayerInfo.getWMSLayer(new NullProgressListener());
+
+            Set<String> supportedSRS = wmsLayer.getSrs();
+            // check if there are additional srs available
+            // if not return an empty list for legacy behavior
+            if (supportedSRS.size() == 1) return Collections.EMPTY_LIST;
+            // int index="EPSG:".length();
+            List<String> otherSRS = supportedSRS.stream().collect(Collectors.toList());
+            return otherSRS;
+        } catch (IOException e) {
+            LOGGER.log(
+                    Level.SEVERE,
+                    "Error while reading other SRS from WMS Layer :" + resource.getNativeName(),
+                    e);
+        }
+        // default to legacy behavior on failure
+        return Collections.EMPTY_LIST;
     }
 }

@@ -15,6 +15,7 @@ import org.apache.wicket.markup.html.form.ValidationErrorFeedback;
 import org.apache.wicket.util.tester.FormTester;
 import org.geoserver.web.GeoServerHomePage;
 import org.geoserver.web.GeoServerWicketTestSupport;
+import org.geoserver.wms.WMS;
 import org.geoserver.wms.WMSInfo;
 import org.geoserver.wms.web.WMSAdminPage;
 import org.junit.Before;
@@ -81,6 +82,16 @@ public class WMSAdminPageTest extends GeoServerWicketTestSupport {
     }
 
     @Test
+    public void testRootLayerRemove() throws Exception {
+        tester.startPage(WMSAdminPage.class);
+        FormTester ft = tester.newFormTester("form");
+        ft.setValue("rootLayerEnabled", false);
+        ft.submit("submit");
+        tester.assertNoErrorMessage();
+        assertEquals(wms.getMetadata().get(WMS.ROOT_LAYER_IN_CAPABILITIES_KEY), false);
+    }
+
+    @Test
     public void testRootLayerTitle() throws Exception {
         tester.startPage(WMSAdminPage.class);
         FormTester ft = tester.newFormTester("form");
@@ -90,6 +101,26 @@ public class WMSAdminPageTest extends GeoServerWicketTestSupport {
         tester.assertNoErrorMessage();
         assertEquals(wms.getRootLayerTitle(), "test");
         assertEquals(wms.getRootLayerAbstract(), "abstract test");
+    }
+
+    @Test
+    public void testDensification() throws Exception {
+        tester.startPage(WMSAdminPage.class);
+        FormTester ft = tester.newFormTester("form");
+        ft.setValue("aph.densify", true);
+        ft.submit("submit");
+        tester.assertNoErrorMessage();
+        assertEquals(wms.getMetadata().get(WMS.ADVANCED_PROJECTION_DENSIFICATION_KEY), true);
+    }
+
+    @Test
+    public void testDisableWrappingHeuristic() throws Exception {
+        tester.startPage(WMSAdminPage.class);
+        FormTester ft = tester.newFormTester("form");
+        ft.setValue("aph.dlh", true);
+        ft.submit("submit");
+        tester.assertNoErrorMessage();
+        assertEquals(wms.getMetadata().get(WMS.DATELINE_WRAPPING_HEURISTIC_KEY), true);
     }
 
     @Test

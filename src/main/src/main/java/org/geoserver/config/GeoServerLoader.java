@@ -5,6 +5,7 @@
  */
 package org.geoserver.config;
 
+import com.google.common.base.Stopwatch;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,6 @@ import org.geoserver.catalog.WMSStoreInfo;
 import org.geoserver.catalog.WMTSLayerInfo;
 import org.geoserver.catalog.WMTSStoreInfo;
 import org.geoserver.catalog.WorkspaceInfo;
-import org.geoserver.catalog.Wrapper;
 import org.geoserver.catalog.event.CatalogListener;
 import org.geoserver.catalog.impl.CatalogImpl;
 import org.geoserver.catalog.util.LegacyCatalogImporter;
@@ -49,6 +49,7 @@ import org.geoserver.platform.resource.Resources;
 import org.geoserver.platform.resource.Resources.ExtensionFilter;
 import org.geoserver.util.Filter;
 import org.geoserver.util.IOUtils;
+import org.geotools.util.decorate.Wrapper;
 import org.geotools.util.logging.Logging;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
@@ -391,7 +392,10 @@ public abstract class GeoServerLoader {
         Resource f = resourceLoader.get("catalog.xml");
         if (!Resources.exists(f)) {
             // assume 2.x style data directory
+            Stopwatch sw = Stopwatch.createStarted();
+            LOGGER.info("Loading catalog...");
             CatalogImpl catalog2 = (CatalogImpl) readCatalog(xp);
+            LOGGER.info("Read catalog in " + sw.stop());
             // make to remove the old resource pool catalog listener
             ((CatalogImpl) catalog).sync(catalog2);
         } else {
@@ -771,8 +775,6 @@ public abstract class GeoServerLoader {
     /**
      * Some config directories in GeoServer are used to store workspace specific configurations,
      * identify them so that we don't log complaints about their existence
-     *
-     * @param f
      */
     private boolean isConfigDirectory(Resource dir) {
         String name = dir.name();
@@ -788,7 +790,7 @@ public abstract class GeoServerLoader {
         // add listeners now as a converter which will convert from the old style
         // data directory to the new
         GeoServerConfigPersister cp = new GeoServerConfigPersister(resourceLoader, xp);
-        GeoServerResourcePersister rp = new GeoServerResourcePersister(resourceLoader);
+        GeoServerResourcePersister rp = new GeoServerResourcePersister(catalog2);
         if (!legacy) {
             catalog2.addListener(cp);
             catalog2.addListener(rp);
@@ -1022,10 +1024,10 @@ public abstract class GeoServerLoader {
 
     /** Helper method which uses xstream to persist an object as xml on disk. */
     void persist(XStreamPersister xp, Object obj, Resource f) throws Exception {
-        BufferedOutputStream out = new BufferedOutputStream(f.out());
-        xp.save(obj, out);
-        out.flush();
-        out.close();
+        try (BufferedOutputStream out = new BufferedOutputStream(f.out())) {
+            xp.save(obj, out);
+            out.flush();
+        }
     }
 
     /** Helper method which uses xstream to depersist an object as xml from disk. */

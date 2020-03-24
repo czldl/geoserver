@@ -10,7 +10,7 @@ GeoServer's speed depends a lot on the chosen Java Runtime Environment (JRE). Th
 
 Tested:
 
-* Java 11 - GeoServer 2.15.x and above (OpenJDK tested)
+* Java 11 and Java 8 - GeoServer 2.15.x and above (OpenJDK tested)
 * Java 8 - GeoServer 2.9.x and above (OpenJDK and Oracle JRE tested)
 * Java 7 - GeoServer 2.6.x to GeoServer 2.8.x (OpenJDK and Oracle JRE tested)
 * Java 6 - GeoServer 2.3.x to GeoServer 2.5.x (Oracle JRE tested)
@@ -69,9 +69,7 @@ Oracle Java
 
 The policy files are available at   
 
-* `Java 8 JCE policy jars <http://www.oracle.com/technetwork/java/javase/downloads/jce8-download-2133166.html>`_ 
-* `Java 7 JCE policy jars <http://www.oracle.com/technetwork/java/javase/downloads/jce-7-download-432124.html>`_
-* `Java 6 JCE policy jars <http://www.oracle.com/technetwork/java/javase/downloads/jce-6-download-429243.html>`_
+* `Java 8 JCE policy jars <http://www.oracle.com/technetwork/java/javase/downloads/jce8-download-2133166.html>`__ 
 
 The download contains two files, **local_policy.jar** and  **US_export_policy.jar**. The default
 versions of these two files are stored in JRE_HOME/lib/security. Replace these two files with the

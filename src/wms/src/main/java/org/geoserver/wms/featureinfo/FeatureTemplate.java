@@ -15,10 +15,12 @@ import java.io.OutputStreamWriter;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.nio.charset.Charset;
-import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import org.geoserver.catalog.Catalog;
+import org.geoserver.platform.GeoServerExtensions;
+import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.template.FeatureWrapper;
 import org.geoserver.template.GeoServerTemplateLoader;
 import org.geoserver.template.TemplateUtils;
@@ -77,20 +79,11 @@ public class FeatureTemplate {
     /** The pattern used by DATETIME_FORMAT */
     public static String DATE_FORMAT_PATTERN = "MM/dd/yy";
 
-    /** Default date format produced by templates */
-    public static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat(DATE_FORMAT_PATTERN);
-
     /** The pattern used by DATETIME_FORMAT */
     public static String DATETIME_FORMAT_PATTERN = "MM/dd/yy HH:mm:ss";
 
-    /** Default datetime format produced by templates */
-    public static SimpleDateFormat DATETIME_FORMAT = new SimpleDateFormat(DATETIME_FORMAT_PATTERN);
-
     /** The pattern used by DATETIME_FORMAT */
     public static String TIME_FORMAT_PATTERN = "HH:mm:ss";
-
-    /** Default time format produced by templates */
-    public static SimpleDateFormat TIME_FORMAT = new SimpleDateFormat();
 
     /** Template cache used to avoid paying the cost of template lookup for each feature */
     Map templateCache = new HashMap();
@@ -311,8 +304,11 @@ public class FeatureTemplate {
 
         // otherwise, build a loader and do the lookup
         GeoServerTemplateLoader templateLoader =
-                new GeoServerTemplateLoader(lookup != null ? lookup : getClass());
-        templateLoader.setFeatureType(featureType);
+                new GeoServerTemplateLoader(
+                        lookup != null ? lookup : getClass(),
+                        GeoServerExtensions.bean(GeoServerResourceLoader.class));
+        Catalog catalog = (Catalog) GeoServerExtensions.bean("catalog");
+        templateLoader.setFeatureType(catalog.getFeatureTypeByName(featureType.getName()));
 
         // Configuration is not thread safe
         synchronized (templateConfig) {
@@ -324,14 +320,7 @@ public class FeatureTemplate {
         return t;
     }
 
-    /**
-     * Returns true if the required template is empty or has its default content
-     *
-     * @param featureType
-     * @param template
-     * @param lookup
-     * @throws IOException
-     */
+    /** Returns true if the required template is empty or has its default content */
     public boolean isTemplateEmpty(
             SimpleFeatureType featureType,
             String template,

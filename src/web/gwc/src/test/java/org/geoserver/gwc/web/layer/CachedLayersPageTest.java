@@ -109,7 +109,7 @@ public class CachedLayersPageTest extends GeoServerWicketTestSupport {
         tester.startPage(page);
         tester.assertModelValue(
                 "table:listContainer:items:1:itemProperties:7:component:seedLink",
-                "http://localhost:80/context/gwc/rest/seed/cgf:Polygons");
+                "http://localhost/context/gwc/rest/seed/cgf:Polygons");
     }
 
     @Test
@@ -147,9 +147,7 @@ public class CachedLayersPageTest extends GeoServerWicketTestSupport {
             IModel<?> model = (IModel<?>) getReplaceModelMethod.invoke(attr.get(0));
             assertTrue(
                     "Unmangled names fail",
-                    model.getObject()
-                            .toString()
-                            .contains("http://localhost:80/context/gwc/demo/cgf"));
+                    model.getObject().toString().contains("http://localhost/context/gwc/demo/cgf"));
             return;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -183,5 +181,43 @@ public class CachedLayersPageTest extends GeoServerWicketTestSupport {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Test
+    public void testAutoTileCachingTabSelection() {
+        // this tests asserts that when a layer is clicked on Tile Layer page
+        // the resulting navigation page should have the 'Tile Caching' tab selected by itself
+        CachedLayersPage page = new CachedLayersPage();
+
+        // load tiles layer list page
+        tester.startPage(page);
+        tester.assertRenderedPage(CachedLayersPage.class);
+
+        // click on the first layer
+        tester.clickLink("table:listContainer:items:1:itemProperties:1:component:link", true);
+
+        // UI should navigate to ResourceConfiguration Page with Tiles tab selected
+        tester.assertComponent("publishedinfo:tabs:panel", LayerCacheOptionsTabPanel.class);
+    }
+
+    @Test
+    public void testGWCClean() {
+        // This asserts GWC integration from GUI
+        CachedLayersPage page = new CachedLayersPage();
+
+        // load tiles layer list page
+        tester.startPage(page);
+        tester.assertRenderedPage(CachedLayersPage.class);
+
+        //        // click on the Empty All Link
+        tester.clickLink("headerPanel:clearGwcLink", true);
+
+        // assert the dialog shows up
+        tester.assertVisible("dialog");
+
+        // click submit
+        tester.clickLink("dialog:dialog:content:form:submit", true);
+
+        tester.assertNoErrorMessage();
     }
 }

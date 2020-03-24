@@ -17,7 +17,7 @@ import java.util.Map;
 import org.geoserver.data.CatalogWriter;
 import org.geoserver.data.test.MockData;
 import org.geoserver.data.test.SystemTestData;
-import org.geoserver.data.util.IOUtils;
+import org.geoserver.util.IOUtils;
 import org.geotools.appschema.resolver.data.SampleDataAccess;
 import org.geotools.appschema.resolver.data.SampleDataAccessData;
 import org.geotools.appschema.resolver.data.SampleDataAccessFactory;
@@ -55,11 +55,7 @@ public class SampleDataAccessMockData extends SystemTestData {
     /** the 'featureTypes' directory, under 'data' */
     File featureTypes;
 
-    /**
-     * Constructor. Creates empty mock data directory.
-     *
-     * @throws IOException
-     */
+    /** Constructor. Creates empty mock data directory. */
     public SampleDataAccessMockData() throws IOException {
         data = IOUtils.createRandomDirectory("./target", "sample-data-access-mock", "data");
         data.delete();
@@ -124,11 +120,7 @@ public class SampleDataAccessMockData extends SystemTestData {
         data = null;
     }
 
-    /**
-     * Writes catalog.xml to the data directory.
-     *
-     * @throws IOException
-     */
+    /** Writes catalog.xml to the data directory. */
     @SuppressWarnings("serial")
     protected void setUpCatalog() throws IOException {
         CatalogWriter writer = new CatalogWriter();
@@ -170,13 +162,7 @@ public class SampleDataAccessMockData extends SystemTestData {
         IOUtils.copy(input, new File(getDataDirectoryRoot(), location));
     }
 
-    /**
-     * Stolen from {@link MockData}.
-     *
-     * @param name
-     * @param extraParams
-     * @throws IOException
-     */
+    /** Stolen from {@link MockData}. */
     public void info(String datastore, String prefix, String type) throws IOException {
 
         // prepare extra params default

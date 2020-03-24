@@ -46,7 +46,6 @@ public class PutIgnoringExtensionContentNegotiationStrategy implements ContentNe
     /**
      * Determine the list of supported media types
      *
-     * @param webRequest
      * @return {@link #mediaTypes}, as long as the request is a PUT or POST, and the path provided
      *     by webRequest matches. Otherwise returns an empty list (never null).
      */
@@ -54,7 +53,8 @@ public class PutIgnoringExtensionContentNegotiationStrategy implements ContentNe
     public List<MediaType> resolveMediaTypes(NativeWebRequest webRequest)
             throws HttpMediaTypeNotAcceptableException {
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
-        if (pathMatcher.getMatchingCondition(request) != null
+        if (request != null
+                && pathMatcher.getMatchingCondition(request) != null
                 && ("PUT".equals(request.getMethod()) || "POST".equals(request.getMethod()))) {
             return mediaTypes;
         }

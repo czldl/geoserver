@@ -22,7 +22,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.geotools.data.DataAccess;
 import org.geotools.data.DataSourceException;
 import org.geotools.data.DataStore;
@@ -148,12 +147,7 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
         }
     }
 
-    /**
-     * Builds the default sort for the underlying feature source query
-     *
-     * @param schema
-     * @return
-     */
+    /** Builds the default sort for the underlying feature source query */
     protected SortBy[] buildDefaultSort(FeatureType schema) {
         String timeStart = propertyMapper.getSourceName("timeStart");
         String identifier = propertyMapper.getSourceName("identifier");
@@ -271,13 +265,7 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
         return getDelegateCollectionSource().getCount(mappedQuery);
     }
 
-    /**
-     * Maps query back the main underlying feature source
-     *
-     * @param query
-     * @return
-     * @throws IOException
-     */
+    /** Maps query back the main underlying feature source */
     protected Query mapToSimpleCollectionQuery(Query query, boolean addJoins) throws IOException {
         Query result = new Query(getDelegateCollectionSource().getSchema().getTypeName());
         final Filter originalFilter = query.getFilter();
@@ -372,8 +360,6 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
 
     /**
      * Name of the table to join in case the {@link OpenSearchAccess#LAYERS} property is requested
-     *
-     * @return
      */
     protected String getCollectionLayerTable() {
         return "collection_layer";
@@ -382,41 +368,27 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
     /**
      * Name of the metadata table to join in case the {@link
      * OpenSearchAccess#METADATA_PROPERTY_NAME} property is requested
-     *
-     * @return
      */
     protected abstract String getMetadataTable();
 
     /**
      * Name of the link table to join in case the {@link OpenSearchAccess#OGC_LINKS_PROPERTY_NAME}
      * property is requested
-     *
-     * @return
      */
     protected abstract String getLinkTable();
 
     /**
      * Name of the field linking back to the main table in case the {@link
      * OpenSearchAccess#OGC_LINKS_PROPERTY_NAME} property is requested
-     *
-     * @return
      */
     protected abstract String getLinkForeignKey();
 
-    /**
-     * Name of the thumbnail table
-     *
-     * @return
-     */
+    /** Name of the thumbnail table */
     protected abstract String getThumbnailTable();
 
     /**
      * Searches for an optional property among the query attributes. Returns true only if the
      * property is explicitly listed
-     *
-     * @param query
-     * @param property
-     * @return
      */
     protected boolean hasOutputProperty(Query query, Name property, boolean includedByDefault) {
         if (query.getProperties() == null) {
@@ -461,12 +433,7 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
         return new MappingFeatureCollection(schema, fc, this::mapToComplexFeature);
     }
 
-    /**
-     * Maps the underlying features (eventually joined) to the output complex feature
-     *
-     * @param it
-     * @return
-     */
+    /** Maps the underlying features (eventually joined) to the output complex feature */
     protected Feature mapToComplexFeature(PushbackFeatureIterator<SimpleFeature> it) {
         SimpleFeature fi = it.next();
 
@@ -522,12 +489,7 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
         return feature;
     }
 
-    /**
-     * Performs the common mappings, subclasses can override to add more
-     *
-     * @param builder
-     * @param fi
-     */
+    /** Performs the common mappings, subclasses can override to add more */
     protected void mapPropertiesToComplex(ComplexFeatureBuilder builder, SimpleFeature fi) {
         AttributeBuilder ab = new AttributeBuilder(FEATURE_FACTORY);
         for (PropertyDescriptor pd : schema.getDescriptors()) {
@@ -574,13 +536,7 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
         return retyped;
     }
 
-    /**
-     * Maps a complex feature back to one or more simple features
-     *
-     * @param it
-     * @return
-     * @throws IOException
-     */
+    /** Maps a complex feature back to one or more simple features */
     protected SimpleFeature mapToMainSimpleFeature(Feature feature) throws IOException {
         // map the primary simple feature
         final SimpleFeatureType simpleSchema = getDelegateCollectionSource().getSchema();
@@ -664,9 +620,6 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
     /**
      * Removes the child features associated to a given main feature, the subclasses can override to
      * customize
-     *
-     * @param collectionIdentifiers
-     * @throws IOException
      */
     protected void removeChildFeatures(final List<String> collectionIdentifiers)
             throws IOException {
@@ -699,22 +652,9 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
     }
 
     @Override
-    public void modifyFeatures(AttributeDescriptor[] types, Object[] values, Filter filter)
-            throws IOException {
-        Name[] names = Stream.of(types).map(type -> type.getName()).toArray(size -> new Name[size]);
-        modifyFeatures(names, values, filter);
-    }
-
-    @Override
     public void modifyFeatures(Name attributeName, Object attributeValue, Filter filter)
             throws IOException {
         modifyFeatures(new Name[] {attributeName}, new Object[] {attributeValue}, filter);
-    }
-
-    @Override
-    public void modifyFeatures(AttributeDescriptor type, Object value, Filter filter)
-            throws IOException {
-        modifyFeatures(type.getName(), value, filter);
     }
 
     @Override
@@ -882,15 +822,7 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
      */
     protected void featuresModified() {}
 
-    /**
-     * Allows subclasses to handle other attributes mapped in secondary tables
-     *
-     * @param name
-     * @param value
-     * @param mappedFilter
-     * @return
-     * @throws IOException
-     */
+    /** Allows subclasses to handle other attributes mapped in secondary tables */
     protected boolean modifySecondaryAttribute(Name name, Object value, Filter mappedFilter)
             throws IOException {
         return false;
@@ -907,7 +839,6 @@ public abstract class AbstractMappingStore implements FeatureStore<FeatureType, 
      *     secondary table one
      * @param featureBuilder Transforms the complex feature value in a feature collection for the
      *     secondary table, it will be inserted in place of the old values
-     * @throws IOException
      */
     protected void modifySecondaryTable(
             Filter mainTypeFilter,

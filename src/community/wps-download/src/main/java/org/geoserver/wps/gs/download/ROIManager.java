@@ -117,7 +117,6 @@ final class ROIManager {
      *
      * @param targetCRS a valid instance of {@link CoordinateReferenceSystem}
      * @throws IOException in case something bad happens.
-     * @throws FactoryException
      */
     public void useTargetCRS(final CoordinateReferenceSystem targetCRS)
             throws IOException, FactoryException {
@@ -215,8 +214,7 @@ final class ROIManager {
             return isRoiCrsEqualsTargetCrs() ? originalRoi : getRoiInTargetCRS();
         } else {
             // use envelope of the ROI to simply crop and not clip the raster. This is important
-            // since when
-            // reprojecting we might read a bit more than needed!
+            // since when reprojecting we might read a bit more than needed!
             return isRoiCrsEqualsTargetCrs()
                     ? originalRoi.getEnvelope()
                     : getSafeRoiInTargetCRS().getEnvelope();

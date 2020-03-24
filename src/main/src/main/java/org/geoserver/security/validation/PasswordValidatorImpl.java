@@ -6,7 +6,12 @@
 
 package org.geoserver.security.validation;
 
-import static org.geoserver.security.validation.PasswordPolicyException.*;
+import static org.geoserver.security.validation.PasswordPolicyException.MAX_LENGTH_$1;
+import static org.geoserver.security.validation.PasswordPolicyException.MIN_LENGTH_$1;
+import static org.geoserver.security.validation.PasswordPolicyException.NO_DIGIT;
+import static org.geoserver.security.validation.PasswordPolicyException.NO_LOWERCASE;
+import static org.geoserver.security.validation.PasswordPolicyException.NO_UPPERCASE;
+import static org.geoserver.security.validation.PasswordPolicyException.RESERVED_PREFIX_$1;
 
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -25,7 +30,7 @@ import org.geoserver.security.password.PasswordValidator;
 public class PasswordValidatorImpl extends AbstractSecurityValidator implements PasswordValidator {
 
     protected PasswordPolicyConfig config;
-    protected static Set<String> notAllowedPrefixes;
+    protected static volatile Set<String> notAllowedPrefixes;
     protected static Object lock = new Object();
 
     /** Calculates not allowed prefixes */
@@ -34,24 +39,24 @@ public class PasswordValidatorImpl extends AbstractSecurityValidator implements 
     }
 
     public static Set<String> getNotAllowedPrefixes() {
-        if (notAllowedPrefixes != null) return notAllowedPrefixes;
-        synchronized (lock) {
-            if (notAllowedPrefixes != null) return notAllowedPrefixes;
-
-            notAllowedPrefixes = new HashSet<String>();
-            for (GeoServerPasswordEncoder enc :
-                    GeoServerExtensions.extensions(GeoServerPasswordEncoder.class)) {
-                notAllowedPrefixes.add(enc.getPrefix() + GeoServerPasswordEncoder.PREFIX_DELIMTER);
+        if (notAllowedPrefixes == null) {
+            synchronized (lock) {
+                if (notAllowedPrefixes == null) {
+                    HashSet<String> nap = new HashSet<>();
+                    for (GeoServerPasswordEncoder enc :
+                            GeoServerExtensions.extensions(GeoServerPasswordEncoder.class)) {
+                        nap.add(enc.getPrefix() + GeoServerPasswordEncoder.PREFIX_DELIMTER);
+                    }
+                    notAllowedPrefixes = nap;
+                }
             }
-            return notAllowedPrefixes;
         }
+        return notAllowedPrefixes;
     }
 
     /**
      * Checks if the password starts with an encoder prefix, if true return the prefix, if false
      * return <code>null</code>
-     *
-     * @param password
      */
     public static String passwordStartsWithEncoderPrefix(char[] password) {
 
@@ -111,12 +116,7 @@ public class PasswordValidatorImpl extends AbstractSecurityValidator implements 
         if (prefix != null) throw createSecurityException(RESERVED_PREFIX_$1, prefix);
     }
 
-    /**
-     * Executes statis check methods from the character class
-     *
-     * @param methodname
-     * @param charArray
-     */
+    /** Executes statis check methods from the character class */
     protected boolean checkUsingMethod(String methodname, char[] charArray) {
         try {
             Method m = getClass().getMethod(methodname, Character.class);

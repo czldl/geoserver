@@ -5,6 +5,8 @@
  */
 package org.geoserver.web;
 
+import static org.geoserver.web.GeoServerApplication.GEOSERVER_CSRF_DISABLED;
+
 import java.util.Locale;
 import org.apache.wicket.Component;
 import org.apache.wicket.MarkupContainer;
@@ -35,6 +37,8 @@ public abstract class GeoServerWicketTestSupport extends GeoServerSecurityTestSu
         // prevent Wicket from bragging about us being in dev mode (and run
         // the tests as if we were in production all the time)
         System.setProperty("wicket.configuration", "deployment");
+        // Disable CSRF protection for tests, since the test framework doesn't set the Referer
+        System.setProperty(GEOSERVER_CSRF_DISABLED, "true");
 
         // make sure that we check the english i18n when needed
         Locale.setDefault(Locale.ENGLISH);
@@ -110,7 +114,6 @@ public abstract class GeoServerWicketTestSupport extends GeoServerSecurityTestSu
      * class is equal, subclass or implementor of the specified class
      *
      * @param root the component under which the search is to be performed
-     * @param content
      * @param componentClass the target class, or null if any component will do
      */
     public Component findComponentByContent(
@@ -167,13 +170,7 @@ public abstract class GeoServerWicketTestSupport extends GeoServerSecurityTestSu
         return null;
     }
 
-    /**
-     * Execute Ajax Event Behavior with attached value.
-     *
-     * @param path
-     * @param event
-     * @param value
-     */
+    /** Execute Ajax Event Behavior with attached value. */
     protected void executeAjaxEventBehavior(String path, String event, String value) {
         String[] ids = path.split(":");
         String id = ids[ids.length - 1];

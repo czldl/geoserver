@@ -40,7 +40,6 @@ import org.geoserver.catalog.WMSStoreInfo;
 import org.geoserver.catalog.WMTSStoreInfo;
 import org.geoserver.catalog.WorkspaceInfo;
 import org.geoserver.catalog.event.CatalogListener;
-import org.geoserver.catalog.impl.AbstractDecorator;
 import org.geoserver.catalog.util.CloseableIterator;
 import org.geoserver.catalog.util.CloseableIteratorAdapter;
 import org.geoserver.platform.GeoServerExtensions;
@@ -59,6 +58,7 @@ import org.geoserver.security.decorators.SecuredWMTSLayerInfo;
 import org.geoserver.security.decorators.SecuredWMTSStoreInfo;
 import org.geoserver.security.impl.DataAccessRuleDAO;
 import org.geoserver.security.impl.DefaultResourceAccessManager;
+import org.geotools.util.decorate.AbstractDecorator;
 import org.opengis.feature.type.Name;
 import org.opengis.filter.Filter;
 import org.opengis.filter.sort.SortBy;
@@ -70,7 +70,7 @@ import org.springframework.util.Assert;
 
 /**
  * Wraps the catalog and applies the security directives provided by a {@link ResourceAccessManager}
- * or a {@link DataAccessManager} registered in the Spring application context
+ * registered in the Spring application context
  *
  * @author Andrea Aime - GeoSolutions
  */
@@ -103,12 +103,7 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     static ResourceAccessManager lookupResourceAccessManager() throws Exception {
         ResourceAccessManager manager = GeoServerExtensions.bean(ResourceAccessManager.class);
         if (manager == null) {
-            DataAccessManager daManager = lookupDataAccessManager();
-            if (daManager == null) {
-                manager = buildDefaultResourceAccessManager();
-            } else {
-                manager = new DataAccessManagerAdapter(daManager);
-            }
+            manager = buildDefaultResourceAccessManager();
         }
         CatalogFilterAccessManager lwManager = new CatalogFilterAccessManager();
         lwManager.setDelegate(manager);
@@ -119,14 +114,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
         return new DefaultResourceAccessManager(
                 GeoServerExtensions.bean(DataAccessRuleDAO.class),
                 (Catalog) GeoServerExtensions.bean("rawCatalog"));
-    }
-
-    static DataAccessManager lookupDataAccessManager() throws Exception {
-        DataAccessManager manager = GeoServerExtensions.bean(DataAccessManager.class);
-        if (manager != null && manager instanceof DataAccessManagerWrapper) {
-            ((DataAccessManagerWrapper) manager).setDelegate(buildDefaultResourceAccessManager());
-        }
-        return manager;
     }
 
     public SecureCatalogImpl(Catalog catalog, ResourceAccessManager manager) {
@@ -290,22 +277,11 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
         return filterResources(user(), delegate.getFeatureTypesByNamespace(namespace));
     }
 
-    public FeatureTypeInfo getFeatureTypeByStore(DataStoreInfo dataStore, String name) {
-        return checkAccess(
-                user(),
-                delegate.getFeatureTypeByStore(dataStore, name),
-                MixedModeBehavior.CHALLENGE);
-    }
-
     public FeatureTypeInfo getFeatureTypeByDataStore(DataStoreInfo dataStore, String name) {
         return checkAccess(
                 user(),
                 delegate.getFeatureTypeByDataStore(dataStore, name),
                 MixedModeBehavior.CHALLENGE);
-    }
-
-    public List<FeatureTypeInfo> getFeatureTypesByStore(DataStoreInfo store) {
-        return filterResources(user(), delegate.getFeatureTypesByStore(store));
     }
 
     public List<FeatureTypeInfo> getFeatureTypesByDataStore(DataStoreInfo store) {
@@ -747,7 +723,7 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
             Authentication user,
             @Nonnull CatalogInfo info,
             MixedModeBehavior mixedModeBehavior) {
-        Assert.notNull(info);
+        Assert.notNull(info, "CatalogInfo must not be null");
 
         if (info instanceof NamespaceInfo) {
             // route the security check thru the associated workspace info
@@ -823,11 +799,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Factors out the policy that decides what access level the current user has to a specific
      * resource considering the read/write access, the security mode, and the filtering status
-     *
-     * @param user
-     * @param canRead
-     * @param canWrite
-     * @param resourceName
      */
     public WrapperPolicy buildWrapperPolicy(
             Authentication user,
@@ -846,11 +817,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Factors out the policy that decides what access level the current user has to a specific
      * resource considering the read/write access, the security mode, and the filtering status
-     *
-     * @param user
-     * @param canRead
-     * @param canWrite
-     * @param resourceName
      */
     public WrapperPolicy buildWrapperPolicy(
             Authentication user,
@@ -1022,9 +988,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Given a list of resources, returns a copy of it containing only the resources the user can
      * access
-     *
-     * @param user
-     * @param resources
      */
     protected <T extends ResourceInfo> List<T> filterResources(
             Authentication user, List<T> resources) {
@@ -1039,9 +1002,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Given a list of stores, returns a copy of it containing only the resources the user can
      * access
-     *
-     * @param user
-     * @param resources
      */
     protected <T extends StoreInfo> List<T> filterStores(Authentication user, List<T> resources) {
         List<T> result = new ArrayList<T>();
@@ -1055,9 +1015,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Given a list of layer groups, returns a copy of it containing only the groups the user can
      * access
-     *
-     * @param user
-     * @param groups
      */
     protected List<LayerGroupInfo> filterGroups(Authentication user, List<LayerGroupInfo> groups) {
         List<LayerGroupInfo> result = new ArrayList<LayerGroupInfo>();
@@ -1070,9 +1027,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
 
     /**
      * Given a list of layers, returns a copy of it containing only the layers the user can access
-     *
-     * @param user
-     * @param layers
      */
     protected List<LayerInfo> filterLayers(Authentication user, List<LayerInfo> layers) {
         List<LayerInfo> result = new ArrayList<LayerInfo>();
@@ -1098,9 +1052,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Given a list of namespaces, returns a copy of it containing only the namespaces the user can
      * access
-     *
-     * @param user
-     * @param namespaces
      */
     protected <T extends NamespaceInfo> List<T> filterNamespaces(
             Authentication user, List<T> namespaces) {
@@ -1115,9 +1066,6 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     /**
      * Given a list of workspaces, returns a copy of it containing only the workspaces the user can
      * access
-     *
-     * @param user
-     * @param namespaces
      */
     protected <T extends WorkspaceInfo> List<T> filterWorkspaces(
             Authentication user, List<T> workspaces) {
@@ -1506,14 +1454,15 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
             Class<T> of, Filter filter, Integer offset, Integer count, SortBy sortBy) {
         Filter securityFilter = securityFilter(of, filter);
 
-        CloseableIterator<T> filtered;
-        filtered = delegate.list(of, securityFilter, offset, count, sortBy);
+        @SuppressWarnings("PMD.CloseResource") // wrapped and returned
+        CloseableIterator<T> filtered = delegate.list(of, securityFilter, offset, count, sortBy);
 
         // create secured decorators on-demand. Assume this method is used only for listing, not
         // for accessing a single resource by name/id, thus use hide policy for mixed mode
         final Function<T, T> securityWrapper = securityWrapper(of, MixedModeBehavior.HIDE);
-        final CloseableIterator<T> filteredWrapped;
-        filteredWrapped = CloseableIteratorAdapter.transform(filtered, securityWrapper);
+        @SuppressWarnings("PMD.CloseResource") // wrapped and returned
+        final CloseableIterator<T> filteredWrapped =
+                CloseableIteratorAdapter.transform(filtered, securityWrapper);
 
         // wrap the iterator in a notNull filter to ensure any filtered
         // layers (result is null) don't get passed on from the securityWrapper
@@ -1528,15 +1477,17 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
             Class<T> of, Filter filter, Integer offset, Integer count, SortBy... sortBy) {
         Filter securityFilter = securityFilter(of, filter);
 
-        CloseableIterator<T> filtered;
+        @SuppressWarnings("PMD.CloseResource") // wrapped and returned
         // HACK here, go straigth to the facade of the delegate to get a method supporting sortby[]
-        filtered = delegate.getFacade().list(of, securityFilter, offset, count, sortBy);
+        CloseableIterator<T> filtered =
+                delegate.getFacade().list(of, securityFilter, offset, count, sortBy);
 
         // create secured decorators on-demand. Assume this method is used only for listing, not
         // for accessing a single resource by name/id, thus use hide policy for mixed mode
         final Function<T, T> securityWrapper = securityWrapper(of, MixedModeBehavior.HIDE);
-        final CloseableIterator<T> filteredWrapped;
-        filteredWrapped = CloseableIteratorAdapter.transform(filtered, securityWrapper);
+        @SuppressWarnings("PMD.CloseResource") // wrapped and returned
+        final CloseableIterator<T> filteredWrapped =
+                CloseableIteratorAdapter.transform(filtered, securityWrapper);
 
         // wrap the iterator in a notNull filter to ensure any filtered
         // layers (result is null) don't get passed on from the securityWrapper
@@ -1622,5 +1573,13 @@ public class SecureCatalogImpl extends AbstractDecorator<Catalog> implements Cat
     @Override
     public CatalogCapabilities getCatalogCapabilities() {
         return delegate.getCatalogCapabilities();
+    }
+
+    public boolean isDefaultAccessManager() {
+        ResourceAccessManager manager = this.accessManager;
+        while (ResourceAccessManagerWrapper.class.isAssignableFrom(manager.getClass())) {
+            manager = ((ResourceAccessManagerWrapper) manager).unwrap();
+        }
+        return manager instanceof DefaultResourceAccessManager;
     }
 }

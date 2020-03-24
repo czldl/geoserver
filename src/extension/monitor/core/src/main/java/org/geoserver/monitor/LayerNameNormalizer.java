@@ -19,6 +19,8 @@ import org.geoserver.catalog.NamespaceInfo;
  */
 public class LayerNameNormalizer implements RequestPostProcessor {
 
+    static final String PROCESSOR_NAME = "layerNameNormalizer";
+
     Catalog cat;
 
     public LayerNameNormalizer(Catalog cat) {
@@ -40,7 +42,7 @@ public class LayerNameNormalizer implements RequestPostProcessor {
                 // totally non prefixed, do a catalog lookup for the layer
                 LayerInfo l = cat.getLayerByName(layer);
                 if (l != null) {
-                    layers.set(i, l.getResource().getPrefixedName());
+                    layers.set(i, l.getResource().prefixedName());
                 }
             } else {
                 // prefix, may be by full namespace uri though
@@ -58,5 +60,10 @@ public class LayerNameNormalizer implements RequestPostProcessor {
                 }
             }
         }
+    }
+
+    @Override
+    public String getName() {
+        return PROCESSOR_NAME;
     }
 }

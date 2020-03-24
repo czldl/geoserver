@@ -6,7 +6,6 @@ package org.geoserver.wms.vector;
 
 import static org.geotools.renderer.lite.VectorMapRenderUtils.buildTransform;
 
-import com.google.common.base.Throwables;
 import java.awt.Rectangle;
 import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
@@ -93,8 +92,6 @@ public class PipelineBuilder {
      * @param paintArea The extent of the tile in screen/pixel coordinates
      * @param sourceCrs The CRS of the features
      * @param overSampleFactor Divisor for simplification tolerance.
-     * @return
-     * @throws FactoryException
      */
     public static PipelineBuilder newBuilder(
             ReferencedEnvelope renderingArea,
@@ -152,7 +149,7 @@ public class PipelineBuilder {
             context.pixelSizeInTargetCRS = Math.max(spans_targetCRS[0], spans_targetCRS[1]);
 
         } catch (TransformException e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e);
         }
 
         context.screenSimplificationDistance = PIXEL_BASE_SAMPLE_SIZE / overSampleFactor;
@@ -168,21 +165,13 @@ public class PipelineBuilder {
         return context;
     }
 
-    /**
-     * Prepares features for subsequent manipulation
-     *
-     * @return
-     */
+    /** Prepares features for subsequent manipulation */
     public PipelineBuilder preprocess() {
         addLast(new PreProcess(context.projectionHandler, context.screenMap));
         return this;
     }
 
-    /**
-     * Flatten singleton feature collections
-     *
-     * @return
-     */
+    /** Flatten singleton feature collections */
     public PipelineBuilder collapseCollections() {
         addLast(new CollapseCollections());
         return this;
@@ -263,7 +252,6 @@ public class PipelineBuilder {
      *
      * @param transformToScreenCoordinates If true, further transfrorm from target to screen
      *     coordinates
-     * @return
      */
     public PipelineBuilder transform(final boolean transformToScreenCoordinates) {
         final MathTransform sourceToScreen = context.sourceToScreen;
@@ -279,7 +267,6 @@ public class PipelineBuilder {
      * Simplify the geometry
      *
      * @param isTransformToScreenCoordinates Use screen coordinate space simplification tolerance
-     * @return
      */
     public PipelineBuilder simplify(boolean isTransformToScreenCoordinates) {
 
@@ -298,7 +285,6 @@ public class PipelineBuilder {
      *
      * @param clipToMapBounds Do we actually want to clip. Does nothing if false.
      * @param transformToScreenCoordinates is the pipeline working in screen coordinates
-     * @return
      */
     public PipelineBuilder clip(boolean clipToMapBounds, boolean transformToScreenCoordinates) {
         if (clipToMapBounds) {

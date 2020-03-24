@@ -18,7 +18,9 @@ import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
+import org.geoserver.platform.resource.Files;
 import org.geoserver.platform.resource.Resource;
+import org.geoserver.platform.resource.Resources;
 import org.geoserver.wms.WMSMapContent;
 import org.geotools.util.SoftValueHashMap;
 import org.geotools.util.URLs;
@@ -59,15 +61,7 @@ public class WatermarkDecoration implements MapDecoration {
         }
     }
 
-    /**
-     * Print the WaterMarks into the graphic2D.
-     *
-     * @param g2D
-     * @param paintArea
-     * @throws IOException
-     * @throws ClassCastException
-     * @throws MalformedURLException
-     */
+    /** Print the WaterMarks into the graphic2D. */
     public void paint(Graphics2D g2D, Rectangle paintArea, WMSMapContent mapContent)
             throws MalformedURLException, ClassCastException, IOException {
         BufferedImage logo = getLogo();
@@ -99,7 +93,11 @@ public class WatermarkDecoration implements MapDecoration {
             url = new URL(imageURL);
 
             if (url.getProtocol() == null || url.getProtocol().equals("file")) {
-                File file = loader.url(imageURL);
+                File file =
+                        Resources.find(
+                                Resources.fromURL(
+                                        Files.asResource(loader.getBaseDirectory()), imageURL),
+                                true);
                 if (file.exists()) {
                     url = URLs.fileToUrl(file);
                 }

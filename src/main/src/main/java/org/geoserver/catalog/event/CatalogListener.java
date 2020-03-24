@@ -22,6 +22,11 @@ import org.geoserver.catalog.CatalogException;
  */
 public interface CatalogListener {
 
+    /** Handles the event of just before addition to the catalog. */
+    default void handlePreAddEvent(CatalogBeforeAddEvent event) throws CatalogException {
+        // empty implementation for backward compatibility
+    };
+
     /** Handles the event of an addition to the catalog. */
     void handleAddEvent(CatalogAddEvent event) throws CatalogException;
 
@@ -34,12 +39,6 @@ public interface CatalogListener {
     /** Handles the event of a post modification to an object in the catalog. */
     void handlePostModifyEvent(CatalogPostModifyEvent event) throws CatalogException;
 
-    /**
-     * A callback notifying when GeoServer configuration has been reloaded.
-     *
-     * <p>This method will be removed in recent version as the idea of a "reload" will not exist.
-     *
-     * @deprecated.
-     */
+    /** A callback notifying when GeoServer configuration has been reloaded. */
     void reloaded();
 }

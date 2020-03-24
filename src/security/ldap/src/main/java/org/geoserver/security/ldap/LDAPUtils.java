@@ -5,6 +5,7 @@
  */
 package org.geoserver.security.ldap;
 
+import java.util.function.Supplier;
 import javax.naming.directory.DirContext;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLSession;
@@ -25,11 +26,7 @@ import org.springframework.security.ldap.authentication.SpringSecurityAuthentica
  */
 public class LDAPUtils {
 
-    /**
-     * Creates an LdapContext from a configuration object.
-     *
-     * @param ldapConfig
-     */
+    /** Creates an LdapContext from a configuration object. */
     public static LdapContextSource createLdapContext(LDAPBaseSecurityServiceConfig ldapConfig) {
         LdapContextSource ldapContext =
                 new DefaultSpringSecurityContextSource(ldapConfig.getServerURL());
@@ -55,12 +52,7 @@ public class LDAPUtils {
         return ldapContext;
     }
 
-    /**
-     * Returns an LDAP template bounded to the given context, if not null.
-     *
-     * @param ctx
-     * @param template
-     */
+    /** Returns an LDAP template bounded to the given context, if not null. */
     public static SpringSecurityLdapTemplate getLdapTemplateInContext(
             final DirContext ctx, final SpringSecurityLdapTemplate template) {
         SpringSecurityLdapTemplate authTemplate;
@@ -88,6 +80,38 @@ public class LDAPUtils {
                                 public DirContext getContext(String principal, String credentials)
                                         throws NamingException {
                                     return ctx;
+                                }
+                            });
+        }
+        return authTemplate;
+    }
+
+    /** Returns an LDAP template bounded to the given context supplier, if not null. */
+    public static SpringSecurityLdapTemplate getLdapTemplateInContext(
+            Supplier<DirContext> ctxSupplier, final SpringSecurityLdapTemplate template) {
+        SpringSecurityLdapTemplate authTemplate;
+        if (ctxSupplier == null) {
+            authTemplate = template;
+            ((AbstractContextSource) authTemplate.getContextSource()).setAnonymousReadOnly(true);
+        } else {
+            authTemplate =
+                    new SpringSecurityLdapTemplate(
+                            new ContextSource() {
+
+                                @Override
+                                public DirContext getReadOnlyContext() throws NamingException {
+                                    return ctxSupplier.get();
+                                }
+
+                                @Override
+                                public DirContext getReadWriteContext() throws NamingException {
+                                    return ctxSupplier.get();
+                                }
+
+                                @Override
+                                public DirContext getContext(String principal, String credentials)
+                                        throws NamingException {
+                                    return ctxSupplier.get();
                                 }
                             });
         }

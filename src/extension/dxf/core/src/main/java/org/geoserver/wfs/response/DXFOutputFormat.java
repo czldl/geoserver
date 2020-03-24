@@ -74,11 +74,7 @@ public class DXFOutputFormat extends WFSGetFeatureOutputFormat {
         super(gs, formats);
     }
 
-    /**
-     * Gets current request extension (dxf or zip).
-     *
-     * @param operation
-     */
+    /** Gets current request extension (dxf or zip). */
     public String getDxfExtension(Operation operation) {
         GetFeatureRequest request = GetFeatureRequest.adapt(operation.getParameters()[0]);
 
@@ -151,6 +147,7 @@ public class DXFOutputFormat extends WFSGetFeatureOutputFormat {
      *     java.io.OutputStream, org.geoserver.platform.Operation)
      */
     @Override
+    @SuppressWarnings("PMD.CloseResource") // only wrappers created, out is managed by the servlet
     protected void write(
             FeatureCollectionResponse featureCollection, OutputStream output, Operation operation)
             throws IOException, ServiceException {
@@ -268,11 +265,7 @@ public class DXFOutputFormat extends WFSGetFeatureOutputFormat {
                     "Version " + version + " not supported by dxf output format");
     }
 
-    /**
-     * Gets a list of names for layers, one for each query.
-     *
-     * @param it
-     */
+    /** Gets a list of names for layers, one for each query. */
     private String[] getLayerNames(List<Query> queries) {
         List<String> names = new ArrayList<String>();
         for (Query query : queries) {

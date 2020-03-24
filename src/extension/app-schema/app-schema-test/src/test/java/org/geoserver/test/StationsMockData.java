@@ -353,14 +353,7 @@ public class StationsMockData extends AbstractAppSchemaMockData {
                 otherResourcesFiles);
     }
 
-    /**
-     * Helper method that
-     *
-     * @param resource
-     * @param gmlPrefix
-     * @param gmlDirectory
-     * @return
-     */
+    /** Helper method that */
     private File getTargetFile(String resource, String gmlPrefix, File gmlDirectory) {
         int index = resource.lastIndexOf("/");
         if (index < 0) {
@@ -425,21 +418,21 @@ public class StationsMockData extends AbstractAppSchemaMockData {
     }
 
     /**
-     * String of features to add to Stations feature type
+     * String of features to add to Stations feature type.
      *
      * @return Optional String of features
      */
     protected Optional<String> extraStationFeatures() {
-        return Optional.ofNullable(null);
+        return Optional.empty();
     }
 
     /**
-     * String of features to add to Measurements feature type
+     * String of features to add to Measurements feature type.
      *
      * @return Optional String of features
      */
     protected Optional<String> extraMeasurementFeatures() {
-        return Optional.ofNullable(null);
+        return Optional.empty();
     }
 
     @Override

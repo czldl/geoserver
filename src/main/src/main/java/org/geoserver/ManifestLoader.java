@@ -24,12 +24,12 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
-import org.apache.commons.io.IOUtils;
 import org.geoserver.ManifestLoader.AboutModel.ManifestModel;
 import org.geoserver.config.GeoServer;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resource.Type;
+import org.geotools.util.SuppressFBWarnings;
 import org.geotools.util.factory.GeoTools;
 import org.geotools.util.logging.Logging;
 
@@ -58,38 +58,36 @@ public class ManifestLoader {
 
     private static ClassLoader classLoader;
 
-    /** @throws Exception */
+    @SuppressFBWarnings("ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD")
     public ManifestLoader(GeoServerResourceLoader loader) throws Exception {
 
         classLoader = loader.getClassLoader();
+        if (classLoader == null) {
+            throw new IllegalStateException(
+                    "Could not get the class loader from GeoServerResourceLoader");
+        }
 
         props = new Properties();
 
         // load from jar or classpath
-        InputStream is = null;
-        try {
-            is = classLoader.getResourceAsStream("org/geoserver/" + PROPERTIES_FILE);
+        try (InputStream is = classLoader.getResourceAsStream("org/geoserver/" + PROPERTIES_FILE)) {
             if (is != null) {
                 props.load(is);
             }
         } catch (IOException e) {
             LOGGER.log(Level.FINER, e.getMessage(), e);
-        } finally {
-            IOUtils.closeQuietly(is);
         }
         // override settings from datadir
-        try {
-            // datadir search
-            Resource resource = loader.get(PROPERTIES_FILE);
-            if (resource.getType() == Type.RESOURCE) {
-                is = resource.in();
+        // datadir search
+        Resource resource = loader.get(PROPERTIES_FILE);
+        if (resource.getType() == Type.RESOURCE) {
+            try (InputStream is = resource.in()) {
                 props.load(is);
+            } catch (IOException e2) {
+                LOGGER.log(Level.FINER, e2.getMessage(), e2);
             }
-        } catch (IOException e2) {
-            LOGGER.log(Level.FINER, e2.getMessage(), e2);
-        } finally {
-            IOUtils.closeQuietly(is);
         }
+
         try {
             resourceNameRegex =
                     Pattern.compile(
@@ -118,7 +116,6 @@ public class ManifestLoader {
     /**
      * load an about model
      *
-     * @param loader
      * @throws IllegalArgumentException if arguments are null
      */
     private static AboutModel getAboutModel(final ClassLoader loader)
@@ -153,25 +150,18 @@ public class ManifestLoader {
         try {
             Enumeration<URL> resources = loader.getResources("META-INF/MANIFEST.MF");
             while (resources.hasMoreElements()) {
-                InputStream is = null;
-                try {
-                    URL resource = resources.nextElement();
+                URL resource = resources.nextElement();
 
-                    if (LOGGER.isLoggable(Level.FINE))
-                        LOGGER.fine("Loading resources: " + resource.getFile());
-
-                    is = resource.openStream();
-
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine("Loading resources: " + resource.getFile());
+                try (InputStream is = resource.openStream()) {
                     manifests.put(resource.getPath(), new Manifest(is));
-
                 } catch (IOException e) {
                     // handle
                     LOGGER.log(
                             java.util.logging.Level.SEVERE,
                             "Error loading resources file: " + e.getLocalizedMessage(),
                             e);
-                } finally {
-                    IOUtils.closeQuietly(is);
                 }
             }
         } catch (IOException e) {
@@ -347,10 +337,7 @@ public class ManifestLoader {
             manifests = new TreeSet<ManifestModel>(new ManifestModel.ManifestComparator());
         }
 
-        /**
-         * @param am
-         * @throws IllegalArgumentException
-         */
+        /** */
         public AboutModel(AboutModel am) throws IllegalArgumentException {
             if (am == null) {
                 throw new IllegalArgumentException("Unable to initialize model with a null model");
@@ -372,8 +359,6 @@ public class ManifestLoader {
          * Note that objects are shared between models so changes to objects in the filtered model
          * will also affect the current model.
          *
-         * @param from
-         * @param to
          * @return the filtered model
          * @throws IllegalArgumentException if from or to are null
          */
@@ -532,8 +517,6 @@ public class ManifestLoader {
         /**
          * Add a manifest file as resource with the given name
          *
-         * @param name
-         * @param manifest
          * @return true if this set did not already contain the specified name
          */
         public boolean add(final String name, final Manifest manifest) {
@@ -547,7 +530,6 @@ public class ManifestLoader {
         /**
          * Add a manifest file as resource
          *
-         * @param manifest
          * @return true if this set did not already contain the specified name
          */
         public boolean add(final ManifestModel manifest) {
@@ -679,11 +661,7 @@ public class ManifestLoader {
                     return filterIncludingAttributes(at, include);
                 }
 
-                /**
-                 * @param at
-                 * @param include
-                 * @return a map of properties
-                 */
+                /** @return a map of properties */
                 private static Map<String, String> filterIncludingAttributes(
                         final Attributes at, String[] include) {
                     if (at == null) throw new IllegalArgumentException("Null argument");

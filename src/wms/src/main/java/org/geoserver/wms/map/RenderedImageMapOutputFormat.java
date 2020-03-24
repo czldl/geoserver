@@ -9,6 +9,7 @@ import it.geosolutions.jaiext.lookup.LookupTable;
 import it.geosolutions.jaiext.lookup.LookupTableFactory;
 import it.geosolutions.jaiext.range.Range;
 import it.geosolutions.jaiext.vectorbin.ROIGeometry;
+import it.geosolutions.rendered.viewer.RenderedImageBrowser;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
@@ -78,10 +79,7 @@ import org.geotools.process.function.ProcessFunction;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.CRS.AxisOrder;
 import org.geotools.referencing.operation.transform.AffineTransform2D;
-import org.geotools.renderer.lite.LabelCache;
-import org.geotools.renderer.lite.RendererUtilities;
-import org.geotools.renderer.lite.RenderingTransformationHelper;
-import org.geotools.renderer.lite.StreamingRenderer;
+import org.geotools.renderer.lite.*;
 import org.geotools.renderer.lite.gridcoverage2d.ChannelSelectionUpdateStyleVisitor;
 import org.geotools.renderer.lite.gridcoverage2d.GridCoverageRenderer;
 import org.geotools.styling.RasterSymbolizer;
@@ -156,6 +154,16 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
     private static final String MAP_WRAPPING_FORMAT_OPTION = "mapWrapping";
     private static final String ADV_PROJECTION_HANDLING_FORMAT_OPTION =
             "advancedProjectionHandling";
+    private static final String ADV_PROJECTION_DENSIFICATION_FORMAT_OPTION =
+            "advancedProjectionHandlingDensification";
+    private static final String DISABLE_DATELINE_WRAPPING_HEURISTIC_FORMAT_OPTION =
+            "disableDatelineWrappingHeuristic";
+
+    /** Disable Gutter key */
+    public static final String DISABLE_GUTTER_KEY = "wms.raster.disableGutter";
+
+    /** Disable Gutter */
+    private static Boolean DISABLE_GUTTER = Boolean.getBoolean(DISABLE_GUTTER_KEY);
 
     /** The size of a megabyte */
     private static final int KB = 1024;
@@ -164,6 +172,12 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
 
     /** The lookup table used for data type transformation (it's really the identity one) */
     private static LookupTableJAI IDENTITY_TABLE = new LookupTableJAI(getTable());
+
+    /** Show Chain key */
+    public static final String RASTER_CHAIN_DEBUG_KEY = "wms.raster.enableRasterChainDebug";
+
+    /** Show Chain */
+    private static Boolean RASTER_CHAIN_DEBUG = Boolean.getBoolean(RASTER_CHAIN_DEBUG_KEY);
 
     private Function<WMSMapContent, LabelCache> labelCache = null;
 
@@ -213,7 +227,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
      * @param outputFormats the list of output format names to declare in the GetCapabilities
      *     document, does not need to match {@code mime} (e.g., an output format of {@code
      *     image/geotiff8} may result in a map returned with MIME Type {@code image/tiff})
-     * @param wms
      */
     public RenderedImageMapOutputFormat(String mime, String[] outputFormats, WMS wms) {
         super(mime, outputFormats);
@@ -234,20 +247,12 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         }
     }
 
-    /**
-     * Returns the extension used for the file name in the content disposition header
-     *
-     * @param extension
-     */
+    /** Returns the extension used for the file name in the content disposition header */
     public String getExtension() {
         return extension;
     }
 
-    /**
-     * Sets the extension used for the file name in the content disposition header
-     *
-     * @param extension
-     */
+    /** Sets the extension used for the file name in the content disposition header */
     public void setExtension(String extension) {
         this.extension = extension;
     }
@@ -268,7 +273,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
     /**
      * Actually produces the map image, caring about meta tiling if {@code tiled == true}.
      *
-     * @param mapContent
      * @param tiled Indicates whether metatiling is activated for this map producer.
      */
     public RenderedImageMap produceMap(final WMSMapContent mapContent, final boolean tiled)
@@ -333,8 +337,8 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         // TODO: handle color conversions
         // TODO: handle meta-tiling
         // TODO: how to handle timeout here? I guess we need to move it into the dispatcher?
-
         RenderedImage image = null;
+
         // fast path for pure coverage rendering
         if (DefaultWebMapService.isDirectRasterPathEnabled()
                 && mapContent.layers().size() == 1
@@ -346,12 +350,17 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                 if (request.getInterpolations() != null && request.getInterpolations().size() > 0) {
                     interpolation = request.getInterpolations().get(0);
                 }
+
                 image = directRasterRender(mapContent, 0, renderedCoverages, interpolation);
+
             } catch (Exception e) {
                 throw new ServiceException("Error rendering coverage on the fast path", e);
             }
 
             if (image != null) {
+                image = new RenderedImageTimeDecorator(image);
+                // setting the layer triggers layerStartEvent
+                ((RenderedImageTimeDecorator) image).setLayer(mapContent.layers().get(0));
                 return buildMap(mapContent, image);
             }
         }
@@ -448,8 +457,26 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         // turn on advanced projection handling
         if (wms.isAdvancedProjectionHandlingEnabled()) {
             rendererParams.put(StreamingRenderer.ADVANCED_PROJECTION_HANDLING_KEY, true);
+            if (request.getFormatOptions().get(ADV_PROJECTION_DENSIFICATION_FORMAT_OPTION)
+                    != null) {
+                rendererParams.put(
+                        StreamingRenderer.ADVANCED_PROJECTION_DENSIFICATION_KEY,
+                        getFormatOptionAsBoolean(
+                                request, ADV_PROJECTION_DENSIFICATION_FORMAT_OPTION));
+            } else if (wms.isAdvancedProjectionDensificationEnabled()) {
+                rendererParams.put(StreamingRenderer.ADVANCED_PROJECTION_DENSIFICATION_KEY, true);
+            }
             if (wms.isContinuousMapWrappingEnabled()) {
                 rendererParams.put(StreamingRenderer.CONTINUOUS_MAP_WRAPPING, true);
+            }
+            if (request.getFormatOptions().get(DISABLE_DATELINE_WRAPPING_HEURISTIC_FORMAT_OPTION)
+                    != null) {
+                rendererParams.put(
+                        StreamingRenderer.DATELINE_WRAPPING_HEURISTIC_KEY,
+                        !getFormatOptionAsBoolean(
+                                request, DISABLE_DATELINE_WRAPPING_HEURISTIC_FORMAT_OPTION));
+            } else if (wms.isDateLineWrappingHeuristicDisabled()) {
+                rendererParams.put(StreamingRenderer.DATELINE_WRAPPING_HEURISTIC_KEY, false);
             }
         }
 
@@ -541,7 +568,11 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         final RenderExceptionStrategy nonIgnorableExceptionListener;
         nonIgnorableExceptionListener = new RenderExceptionStrategy(renderer);
         renderer.addRenderListener(nonIgnorableExceptionListener);
-
+        RenderTimeStatistics statistics = null;
+        if (!request.getRequest().equalsIgnoreCase("GETFEATUREINFO")) {
+            statistics = new RenderTimeStatistics();
+            renderer.addRenderListener(statistics);
+        }
         onBeforeRender(renderer);
 
         int maxRenderingTime = wms.getMaxRenderingTime(request);
@@ -626,6 +657,9 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         } finally {
             timeout.stop();
             graphic.dispose();
+            if (statistics != null) {
+                statistics.renderingComplete();
+            }
         }
         throw serviceException;
     }
@@ -667,11 +701,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         return ImageUtils.prepareTransparency(transparent, bgColor, preparedImage, hintsMap);
     }
 
-    /**
-     * Allows subclasses to customize the renderer before the paint method gets invoked
-     *
-     * @param renderer
-     */
+    /** Allows subclasses to customize the renderer before the paint method gets invoked */
     protected void onBeforeRender(StreamingRenderer renderer) {
         // TODO Auto-generated method stub
     }
@@ -787,10 +817,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
      * Sets up a {@link BufferedImage#TYPE_4BYTE_ABGR} if the paletteInverter is not provided, or a
      * indexed image otherwise. Subclasses may override this method should they need a special kind
      * of image
-     *
-     * @param width
-     * @param height
-     * @param paletteInverter
      */
     protected RenderedImage prepareImage(
             int width, int height, IndexColorModel palette, boolean transparent) {
@@ -832,11 +858,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
     /**
      * When you override {@link #prepareImage(int, int, IndexColorModel, boolean)} remember to
      * override this one as well
-     *
-     * @param width
-     * @param height
-     * @param palette
-     * @param transparent
      */
     protected long getDrawingSurfaceMemoryUse(
             int width, int height, IndexColorModel palette, boolean transparent) {
@@ -851,8 +872,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
      * This takes an image with an indexed color model that uses less than 256 colors and has a 8bit
      * sample model, and transforms it to one that has the optimal sample model (for example, 1bit
      * if the palette only has 2 colors)
-     *
-     * @param source
      */
     private static RenderedImage optimizeSampleModel(RenderedImage source) {
         int w = source.getWidth();
@@ -884,7 +903,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
      *     they can be disposed later
      * @return the result of rendering the coverage, or null if there was no coverage, or the
      *     coverage could not be renderer for some reason
-     * @throws FactoryException
      */
     private RenderedImage directRasterRender(
             WMSMapContent mapContent,
@@ -1052,23 +1070,25 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                 final CoordinateReferenceSystem coverageCRS =
                         layer.getFeatureSource().getSchema().getCoordinateReferenceSystem();
                 final GridGeometry2D readGG;
-                final boolean equalsMetadata = CRS.equalsIgnoreMetadata(mapCRS, coverageCRS);
-                boolean sameCRS;
-                try {
-                    sameCRS =
-                            equalsMetadata
-                                    || CRS.findMathTransform(mapCRS, coverageCRS, true)
-                                            .isIdentity();
-                } catch (FactoryException e1) {
-                    final IOException ioe = new IOException();
-                    ioe.initCause(e1);
-                    throw ioe;
+                boolean useGutter = !DISABLE_GUTTER;
+                if (useGutter) {
+                    final boolean equalsMetadata = CRS.equalsIgnoreMetadata(mapCRS, coverageCRS);
+                    boolean sameCRS;
+                    try {
+                        sameCRS =
+                                equalsMetadata
+                                        || CRS.findMathTransform(mapCRS, coverageCRS, true)
+                                                .isIdentity();
+                    } catch (FactoryException e1) {
+                        final IOException ioe = new IOException();
+                        ioe.initCause(e1);
+                        throw ioe;
+                    }
+                    useGutter = !sameCRS || !(interpolation instanceof InterpolationNearest);
                 }
-                final boolean needsGutter =
-                        !sameCRS || !(interpolation instanceof InterpolationNearest);
-                if (!needsGutter) {
-                    readGG = new GridGeometry2D(new GridEnvelope2D(mapRasterArea), mapEnvelope);
 
+                if (!useGutter) {
+                    readGG = new GridGeometry2D(new GridEnvelope2D(mapRasterArea), mapEnvelope);
                 } else {
                     //
                     // SG added gutter to the drawing. We need to investigate much more and also we
@@ -1328,7 +1348,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         //
 
         // in case of component color model
-        boolean noDataTransparencyOnGrayByte = false;
+        boolean noDataTransparencyApplied = false;
         if (cm instanceof ComponentColorModel) {
 
             // convert to RGB if necessary
@@ -1374,7 +1394,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                             bgValues = new double[] {mapToGrayColor(bgColor, ccm), 0};
                         } else {
                             image = transparentImage;
-                            noDataTransparencyOnGrayByte = true;
+                            noDataTransparencyApplied = true;
                         }
                     } else {
                         bgValues = new double[] {mapToGrayColor(bgColor, ccm)};
@@ -1398,7 +1418,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                 hasAlpha = cm.hasAlpha();
             }
 
-            if (bgValues == null && !noDataTransparencyOnGrayByte) {
+            if (bgValues == null && !noDataTransparencyApplied) {
                 if (hasAlpha) {
                     // get alpha
                     final ImageWorker iw = new ImageWorker(image);
@@ -1418,10 +1438,18 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                     }
                 } else {
                     if (transparent) {
-                        image = addAlphaChannel(image);
-                        // this will work fine for all situation where the color components are <= 3
-                        // e.g., one band rasters with no colormap will have only one usually
-                        bgValues = new double[] {0, 0, 0, 0};
+                        // If nodata is available, let's try to make it transparent when rgb.
+                        RenderedImage imageTransparent = rgbNoDataTransparent(image);
+                        if (imageTransparent != null) {
+                            image = imageTransparent;
+                            noDataTransparencyApplied = true;
+                        } else {
+                            image = addAlphaChannel(image);
+                            // this will work fine for all situation where the color components are
+                            // <= 3
+                            // e.g., one band rasters with no colormap will have only one usually
+                            bgValues = new double[] {0, 0, 0, 0};
+                        }
                     } else {
                         // TODO: handle the case where the component color model is not RGB
                         // We cannot use ImageWorker as is because it basically seems to assume
@@ -1455,7 +1483,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                             transparencyType,
                             iw,
                             roiCandidate,
-                            noDataTransparencyOnGrayByte);
+                            noDataTransparencyApplied);
         } else {
             // Check if we need to crop a subset of the produced image, else return it right away
             if (imageBounds.contains(mapRasterArea)
@@ -1466,6 +1494,18 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
                 iw.crop(0, 0, mapWidth, mapHeight);
                 image = iw.getRenderedImage();
             }
+        }
+        if (LOGGER.isLoggable(Level.FINE) && image != null) {
+            LOGGER.log(
+                    Level.FINE,
+                    "Direct rendering path produced the following image chain:\n"
+                            + RenderedImageBrowser.dumpChain(image));
+        }
+        Map<String, String> rawKvp = null;
+        if (RASTER_CHAIN_DEBUG
+                && ((rawKvp = mapContent.getRequest().getRawKvp()) != null)
+                && Boolean.valueOf(rawKvp.get("showchain"))) {
+            RenderedImageBrowser.showChain(image, true, true, "RenderedImageMapOutput", true);
         }
         return image;
     }
@@ -1485,7 +1525,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         if (roiCandidate instanceof ROI) {
             ROI imageROI = (ROI) roiCandidate;
             try {
-                roi = imageROI.intersect(new ROIGeometry(mapRasterArea));
+                roi = new ROIGeometry(mapRasterArea).intersect(imageROI);
             } catch (IllegalArgumentException e) {
                 // in the unlikely event that the ROI does not intersect the target map
                 // area an exception will be thrown. Catching the exception instead of checking
@@ -1589,13 +1629,18 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         }
     }
 
-    /**
-     * Optmized method for Gray Scale Byte images to turn noData value to transparent.
-     *
-     * @param image
-     * @return
-     */
+    /** Optimized method for RGB images to turn noData value to transparent. */
+    private RenderedImage rgbNoDataTransparent(RenderedImage image) {
+        return makeNoDataTransparent(image, 3);
+    }
+
+    /** Optimized method for Gray Scale Byte images to turn noData value to transparent. */
     private RenderedImage grayNoDataTransparent(RenderedImage image) {
+        return makeNoDataTransparent(image, 1);
+    }
+
+    /** Optimized method to turn noData value to transparent. */
+    private RenderedImage makeNoDataTransparent(RenderedImage image, final int numBands) {
         // Using an ImageWorker
         ImageWorker iw = new ImageWorker(image);
         Range noData = iw.getNoData();
@@ -1603,12 +1648,12 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         final int numColorBands = cm.getNumColorComponents();
         if (noData != null
                 && image.getSampleModel().getDataType() == DataBuffer.TYPE_BYTE
-                && numColorBands == 1
+                && numColorBands == numBands
                 && cm instanceof ComponentColorModel) {
             int minValue = noData.getMin().intValue();
             int maxValue = noData.getMax().intValue();
             if (minValue == maxValue && minValue >= Byte.MIN_VALUE && minValue <= Byte.MAX_VALUE) {
-                // Optimization on gray images with noData value. Make that value transparent
+                // Optimization on images with noData value. Make that value transparent
                 Color transparentColor = new Color(minValue, minValue, minValue);
                 iw.makeColorTransparent(transparentColor);
                 return iw.getRenderedImage();
@@ -1640,9 +1685,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
     /**
      * Given a one band (plus eventual alpha) color model and the red part of a gray color returns
      * the appropriate background color to be used in the mosaic operation
-     *
-     * @param red
-     * @param cm
      */
     double mapToGrayColor(Color gray, ComponentColorModel cm) {
         double[] rescaleFactors = new double[DataBuffer.TYPE_UNDEFINED + 1];
@@ -1656,11 +1698,7 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
         return gray.getRed() / rescaleFactors[cm.getTransferType()];
     }
 
-    /**
-     * Returns true if the color is a level of gray
-     *
-     * @param color
-     */
+    /** Returns true if the color is a level of gray */
     private static boolean isLevelOfGray(Color color) {
         return color.getRed() == color.getBlue() && color.getRed() == color.getGreen();
     }
@@ -1690,13 +1728,6 @@ public class RenderedImageMapOutputFormat extends AbstractMapOutputFormat {
     /**
      * Reads the best matching grid out of a grid coverage applying sub-sampling and using overviews
      * as necessary
-     *
-     * @param mapContent
-     * @param reader
-     * @param params
-     * @param requestedRasterArea
-     * @param interpolation
-     * @throws IOException
      */
     private static GridCoverage2D readBestCoverage(
             final ReadingContext context,

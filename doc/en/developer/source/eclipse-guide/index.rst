@@ -135,7 +135,7 @@ in the GeoServer User Manual.
 Starting Jetty with an open SSL port
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The SSL port used ``8843``. 
+The SSL port used ``8443``. 
 
   #. Open the ``Arguments`` panel of the ``Start`` configuration. 
   #. Specify the ``-Dssl.hostname`` parameter, setting it to the full qualified host name of the box 
@@ -148,7 +148,7 @@ The password is **changeit** and the key store contains a self signed certificat
 passed in the ``ssl.hostname`` parameter.
 
 Test the SSL connection by opening a browser and entering  
-**https://ux-desktop03.mc-home.local:8843/geoserver**. The browser should complain about the self 
+**https://ux-desktop03.mc-home.local:8443/geoserver**. The browser should complain about the self 
 singed certificate which does not hurt for test and development setups. 
 
 
@@ -161,6 +161,9 @@ Code formatting
 The Google formatter plugin is embedded in the build and will reformat the code at each build, matching the coding conventions. Please always build before committing!
 
 The `google-java-format <https://github.com/google/google-java-format>`__ project offers a plugin for Eclipse, but we are waiting an support for ASOP variant. While we wait for this fix build once on the command line, to format the any code changes before committing.
+
+As workaround you could use a `modified version <https://github.com/fernandor777/google-java-format/releases/download/1.7-gsgt/google-java-format-eclipse-plugin-1.6.0.jar>`__ with 4 spaces indent by default, putting the jar file on Eclipse dropins folder.
+
 
 You may also:
 

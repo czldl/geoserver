@@ -10,8 +10,8 @@ import org.geoserver.catalog.LayerGroupInfo;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.StyleInfo;
-import org.geoserver.catalog.impl.AbstractDecorator;
 import org.geoserver.catalog.impl.FilteredList;
+import org.geotools.util.decorate.AbstractDecorator;
 
 public class SecuredLayerGroupInfo extends DecoratingLayerGroupInfo {
 
@@ -22,9 +22,6 @@ public class SecuredLayerGroupInfo extends DecoratingLayerGroupInfo {
     /**
      * Overrides the layer group layer list with the one provided (which is supposed to have been
      * wrapped so that each layer can be accessed only accordingly to the current user privileges)
-     *
-     * @param delegate
-     * @param layers
      */
     public SecuredLayerGroupInfo(
             LayerGroupInfo delegate,

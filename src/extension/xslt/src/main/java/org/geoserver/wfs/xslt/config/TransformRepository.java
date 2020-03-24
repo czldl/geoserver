@@ -62,15 +62,11 @@ public class TransformRepository {
                         return null;
                     }
 
-                    InputStream fis = null;
-                    try {
-                        fis = file.in();
+                    try (InputStream fis = file.in()) {
                         TransformInfo info = (TransformInfo) xs.fromXML(fis);
                         info.setName(getTransformName(file));
 
                         return info;
-                    } finally {
-                        IOUtils.closeQuietly(fis);
                     }
                 }
             };
@@ -140,11 +136,7 @@ public class TransformRepository {
         initXStream(catalog);
     }
 
-    /**
-     * Sets up xstream to get nice xml output
-     *
-     * @param catalog
-     */
+    /** Sets up xstream to get nice xml output */
     private void initXStream(Catalog catalog) {
         xs = new SecureXStream();
         xs.allowTypes(new Class[] {TransformInfo.class});
@@ -157,11 +149,7 @@ public class TransformRepository {
         xs.addDefaultImplementation(FeatureTypeInfoImpl.class, FeatureTypeInfo.class);
     }
 
-    /**
-     * The transform name is the same as the config file, minus the extension
-     *
-     * @param file
-     */
+    /** The transform name is the same as the config file, minus the extension */
     protected String getTransformName(Resource file) {
         String name = file.name();
         int idx = name.indexOf(".");
@@ -201,11 +189,7 @@ public class TransformRepository {
         return result;
     }
 
-    /**
-     * Returns transformations associated to a specific feature type
-     *
-     * @param featureType
-     */
+    /** Returns transformations associated to a specific feature type */
     public List<TransformInfo> getTypeTransforms(FeatureTypeInfo featureType) throws IOException {
         List<TransformInfo> allTransformations = getAllTransforms();
         List<TransformInfo> result = new ArrayList<TransformInfo>();
@@ -219,11 +203,7 @@ public class TransformRepository {
         return result;
     }
 
-    /**
-     * Returns a specific transformation by hand
-     *
-     * @param name
-     */
+    /** Returns a specific transformation by hand */
     public TransformInfo getTransformInfo(String name) throws IOException {
         Resource infoFile = getTransformInfoFile(name);
         return infoCache.getItem(infoFile);
@@ -232,9 +212,6 @@ public class TransformRepository {
     /**
      * Deletes a transformation definition and its associated XSLT file (assuming the latter is not
      * shared with other transformations)
-     *
-     * @param info
-     * @throws IOException
      */
     public boolean removeTransformInfo(TransformInfo info) throws IOException {
         Resource infoFile = getTransformInfoFile(info.getName());
@@ -261,11 +238,7 @@ public class TransformRepository {
         return result;
     }
 
-    /**
-     * Returns the XSLT transformer for a specific {@link TransformInfo}
-     *
-     * @param name
-     */
+    /** Returns the XSLT transformer for a specific {@link TransformInfo} */
     public Transformer getTransformer(TransformInfo info) throws IOException {
         Resource txFile = getTransformFile(info);
 
@@ -284,8 +257,6 @@ public class TransformRepository {
     /**
      * Returns the stylesheet of a transformation. It is the duty of the caller to close the input
      * stream after reading it.
-     *
-     * @throws IOException
      */
     public InputStream getTransformSheet(TransformInfo info) throws IOException {
         Resource txFile = getTransformFile(info);
@@ -295,29 +266,18 @@ public class TransformRepository {
 
     /**
      * Writes the stylesheet of a transformation. This method will close the provided input stream.
-     *
-     * @param info
-     * @param sheet
-     * @throws IOException
      */
     public void putTransformSheet(TransformInfo info, InputStream sheet) throws IOException {
         Resource txFile = getTransformFile(info);
-        OutputStream fos = null;
-        try {
-            fos = txFile.out();
+
+        try (OutputStream fos = txFile.out()) {
             IOUtils.copy(sheet, fos);
         } finally {
-            IOUtils.closeQuietly(sheet);
-            IOUtils.closeQuietly(fos);
+            org.geoserver.util.IOUtils.closeQuietly(sheet);
         }
     }
 
-    /**
-     * Saves/updates the specified transformation
-     *
-     * @param transform
-     * @throws IOException
-     */
+    /** Saves/updates the specified transformation */
     public void putTransformInfo(TransformInfo transform) throws IOException {
         if (transform.getName() == null) {
             throw new IllegalArgumentException("Transformation does not have a name set");

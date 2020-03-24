@@ -18,7 +18,7 @@ which would produce four 20x20 icons that graphically represent the rules of the
 
    *Sample legend*
 
-In the following table the whole set of GetLegendGraphic parameters that can be used.
+The following table lists the whole set of GetLegendGraphic parameters that can be used.
 
 .. list-table::
    :widths: 15 5 80
@@ -79,22 +79,23 @@ The general format of ``LEGEND_OPTIONS`` is the same as ``FORMAT_OPTIONS``, that
 Here is a description of the various parameters that can be used in ``LEGEND_OPTIONS``:
 
     - **fontName (string)** the name of the font to be used when generating rule titles. The font must be available on the server
-    - **fontStyle (string)** can be set to italic or bold to control the text style. Other combination are not allowed right now but we could implement that as well.
+    - **fontStyle (string)** can be set to italic or bold to control the text style. Other combinations are not allowed right now but we could implement that as well.
     - **fontSize (integer)** allows us to set the Font size for the various text elements. Notice that default size is 12.
     - **fontColor (hex)** allows us to set the color for the text of rules and labels (see above for recommendation on how to create values). Values are expressed in ``0xRRGGBB`` format
     - **fontAntiAliasing (true/false)** when true enables antialiasing for rule titles
     - **bgColor (hex)** background color for the generated legend, values are expressed in ``0xRRGGBB`` format
     - **dpi (integer)** sets the DPI for the current request, in the same way as it is supported by GetMap. Setting a DPI larger than 91 (the default) makes all fonts, symbols and line widths grow without changing the current scale, making it possible to get a high resolution version of the legend suitable for inclusion in printouts 
     - **forceLabels** "on" means labels will always be drawn, even if only one rule is available. "off" means labels will never be drawn, even if multiple rules are available. Off by default.
+    - **forceTitles** "off" means layer titles will not be drawn for layer groups. On by default.    
     - **labelMargin** margin (in pixels) to use between icons and labels.
     - **layout** sets icons layout to be **vertical** (default) or **horizontal**.
     - **columnheight** enables **multicolumn** layout when layout is **vertical**. Each column height is limited by the columnheight value (in pixels).
     - **rowwidth** enables **multirow** layout when layout is **horizontal**. Each row width is limited by the rowwidth value (in pixels).
     - **columns** enables **multicolumn** layout when layout is **vertical**. The value is the maximum columns number of legend. The rows used are equal to the next greater integer of <total of icons>/<number of columns>.
-    - **rows** enables **multirow** layout when layout is **horizontal**. The value is the the maximum rows number of legend. The columns used are equal to the next greater integer of <total of icons>/<number of rows>.
+    - **rows** enables **multirow** layout when layout is **horizontal**. The value is the maximum rows number of legend. The columns used are equal to the next greater integer of <total of icons>/<number of rows>.
     - **grouplayout** Orientation of groups of layer, possible values are **horizontal** and **vertical** (default if not specified).
     - **countMatched** When set to true, adds at the end of each label the number of features matching that rule in the current map. Requires extra parameters, see details in the :ref:`dedicated section <content-dependent>`.
-    
+    - **hideEmptyRules** When set to true hides rules that are not matching any feature.
 
 Here is a sample request sporting most the options::
 
@@ -112,14 +113,14 @@ A set of LEGEND_OPTIONS keys are used to control icons layout in the produced le
 
 Multi column or multi row layouts are possible, and are controlled by the columnheight / rowwidth options (to limit each column / row size) or by the columns / rows options (to fix the # of columns / rows to be used).
 
-Both columnheight / columns and rowwidth / rows can be used to limit the whole size of the produced image (some icons are skipped id they do not fit into the given limits).
+Both columnheight / columns and rowwidth / rows can be used to limit the whole size of the produced image (some icons are skipped if they do not fit into the given limits).
 
 In addition, orientation of legends in a layergroup can be configured using the grouplayout option.
 
 Raster Legends Explained
 ------------------------
 
-This chapter aim to briefly describe the work that I have performed in order to support legends for raster data that draw information taken from the various bits of the SLD 1.0 RasterSymbolizer element. Recall, that up to now there was no way to create legends for raster data, therefore we have tried to fill the gap by providing an implementation of the getLegendGraphic request that would work with the ColorMap element of the SLD 1.0 RasterSymbolizer. Notice that some "debug" info about the style, like colormap type and band used are printed out as well.
+This chapter aims to briefly describe the work that I have performed in order to support legends for raster data that draw information taken from the various bits of the SLD 1.0 RasterSymbolizer element. Recall, that up to now there was no way to create legends for raster data, therefore we have tried to fill the gap by providing an implementation of the getLegendGraphic request that would work with the ColorMap element of the SLD 1.0 RasterSymbolizer. Notice that some "debug" info about the style, like colormap type and band used are printed out as well.
 
 What's a raster legend
 '''''''''''''''''''''''
@@ -137,7 +138,7 @@ Take as an instance one of the SLD files attached to this page, each row in the 
 
 	<ColorMapEntry color="#732600" quantity="9888" opacity="1.0" label="<-70 mm"/>
 
-The producer for the raster legend will make use of this elements in order to build the legend, with this regards, notice that:
+The producer for the raster legend will make use of this elements in order to build the legend, with this in mind, notice that:
 
     - the width of the Color element is driven by the requested width for the GetLegendGraphic request
     - the width and height of label and rules is computed accordingly to the used Font and Font size for the prepared text (**no new line management for the moment**) 
@@ -145,10 +146,10 @@ The producer for the raster legend will make use of this elements in order to bu
     - the height of each row is set to the maximum height of the single elements
     - the width of each row is set to the sum of the width of the various elements plus the various paddings
     - **dx,dy** the spaces between elements and rows are set to the 15% of the requested width and height. Notice that **dy** is ignored for the colormaps of type **ramp** since they must create a continuous color strip.
-    - **absoluteMargins** true/false, used to change the uom of **dx** from percentage (when false) to a fixed number of pixels (when true).
+    - **absoluteMargins** true/false, used to change the Unit of Measure of **dx** from percentage (when false) to a fixed number of pixels (when true).
     - **mx,my** the margins from the border of the legends are set to the 1.5% of the total size of the legend
 
-Just to jump right to the conclusions (which is a bad practice I know, but no one is perfect ), here below I am adding an image of a sample legend with all the various options at work. The request that generated it is the following::
+In conclusion, here below I am adding an image of a sample legend with all the various options at work. The request that generated it is the following::
 
 	http://localhost:8081/geoserver/wms?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&WIDTH=100&HEIGHT=20&LAYER=it.geosolutions:di08031_da&LEGEND_OPTIONS=forceRule:True;dx:0.2;dy:0.2;mx:0.2;my:0.2;fontStyle:bold;borderColor:0000ff;border:true;fontColor:ff0000;fontSize:18
 
@@ -165,8 +166,8 @@ Raster legends' types
 As you may know (well, actually you might not since I never wrote any real docs about the RasterSymbolizer work I did) GeoServer supports three types of ColorMaps:
 
     - **ramp** this is what SLD 1.0 dictates, which means a linear interpolation weighted on values between the colors of the various ColorMapEntries.
-    - **values** this is an extensions that allows link quantities to colors as specified by the ColorMapEntries quantities. Values not specified are translated into transparent pixels.
-    - **classes** this is an extensions that allows pure classifications based o intervals created from the  ColorMapEntries quantities. Values not specified are translated into transparent pixels.
+    - **values** this is an extension that allows link quantities to colors as specified by the ColorMapEntries quantities. Values not specified are translated into transparent pixels.
+    - **classes** this is an extension that allows pure classifications based on intervals created from the ColorMapEntries quantities. Values not specified are translated into transparent pixels.
 
 Here below I am going to list various examples that use the attached styles on a rainfall floating point geotiff.
 
@@ -194,7 +195,7 @@ Refer to the SLD rainfall_classes.sld in attachment.
 ColorMap type is RAMP
 '''''''''''''''''''''
 
-Refer to the SLD rainfall_classes.sld in attachment. Notice that the first legend show the default border behavior while the second has been force to draw a border for the breakpoint color of the the colormap entry quantity described by the rendered text. Notice that each color element has a part that show the fixed color from the colormap entry it depicts (the lowest part of it, the one that has been outlined by the border in the second legend below) while the upper part of the element has a gradient that connects each element to the previous one to point out the fact that we are using linear interpolation. 
+Refer to the SLD rainfall_classes.sld in attachment. Notice that the first legend shows the default border behavior while the second has been forced to draw a border for the breakpoint color of the colormap entry quantity described by the rendered text. Notice that each color element has a part that show the fixed color from the colormap entry it depicts (the lowest part of it, the one that has been outlined by the border in the second legend below) while the upper part of the element has a gradient that connects each element to the previous one to point out the fact that we are using linear interpolation. 
 
 .. figure:: img/rasterlegend5.png
    :align: center 
@@ -218,8 +219,7 @@ Let's now examine all the interesting elements, one by one. Notice that I am not
 CQL Expressions and ENV
 '''''''''''''''''''''''
 
-If cql expressions are used in ColorMapEntry attributes (see :ref:`here <sld_reference_rastersymbolizer_colormap_cql>`) to create a dynamic color map taking values
-from ENV, the same ENV parameters used for GetMap can be given to GetLegendGraphic to get the desired legend entries.
+If CQL expressions are used in ColorMapEntry attributes (see :ref:`here <sld_reference_rastersymbolizer_colormap_cql>`) to create a dynamic color map taking values from ENV, the same ENV parameters used for GetMap can be given to GetLegendGraphic to get the desired legend entries.
 
 .. _content-dependent:
 
@@ -231,7 +231,7 @@ In order to support it the GetLegendGraphic call needs the following extra param
 
   * BBOX
   * SRS or CRS (depending on the WMS version, SRS for 1.1.1 and CRS for 1.3.0)
-  * SRCWITH and SRCHEIGHT, the size of the reference map (width and height already have a different meaning in GetLegendGraphic)
+  * SRCWIDTH and SRCHEIGHT, the size of the reference map (width and height already have a different meaning in GetLegendGraphic)
   
 Other parameters can also be added to better match the GetMap request, for example, it is recommended to mirror 
 filtering vendor parameters such as, for example, CQL_FILTER,FILTER,FEATUREID,TIME,ELEVATION.
@@ -239,9 +239,8 @@ filtering vendor parameters such as, for example, CQL_FILTER,FILTER,FEATUREID,TI
 Content dependent evaluation is enabled via the following LEGEND_OPTIONS parameters:
  
   *  countMatched: adds the number of features matching the particular rule at the end of the rule label (requires visible labels to work). Applicable only to vector layers.
+  *  hideEmptyRules:  hides rules that are not matching any feature. Applicable only if countMatched is true.
   
-More approaches may be added in future (e.g., making rules that are not matching any feature disappear).
-
 For example, let's assume the following layout is added to GeoServer (``legend.xml`` to be placed in ``GEOSERVER_DATA_DIR/layouts``)::
 
   <layout>
@@ -270,6 +269,11 @@ The result will look as follows:
 
    *Embedded legend, single state*
 
+.. figure:: img/states-one-hide-empty.png
+   :align: center 
+
+   *Embedded legend, single state, hide empty rules*
+
 The same can be achieved using a stand-alone GetLegendGraphic request::
 
   http://localhost:8080/geoserver/topp/wms?service=WMS&version=1.1.0&request=GetLegendGraphic&width=20&height=20&layer=topp:states&bbox=-124.73142200000001,24.955967,-66.969849,49.371735&srcwidth=768&srcheight=330&srs=EPSG:4326&format=image/png&legend_options=countMatched:true;fontAntiAliasing:true
@@ -278,6 +282,16 @@ The same can be achieved using a stand-alone GetLegendGraphic request::
    :align: center 
 
    *Direct legend request*
+
+Or hide the empty rules using a stand-alone GetLegendGraphic request::
+
+  http://localhost:8080/geoserver/topp/wms?service=WMS&version=1.1.0&request=GetLegendGraphic&width=20&height=20&layer=topp:states&bbox=-101.0028076171875,31.025390625,-96.7840576171875,32.838134765625&srcwidth=768&srcheight=330&srs=EPSG:4326&format=image/png&legend_options=countMatched:true;fontAntiAliasing:true;hideEmptyRules:true
+  
+.. figure:: img/legend-not-empty.png
+   :align: center 
+
+   *Direct legend request*
+
 
 
 JSON Output Format
@@ -355,7 +369,7 @@ Which returns a JSON response:
 
 This JSON contains an array of Legends (one for each layer requested) and 
 each legend contains some metadata about the legend and an array of ``rule`` 
-objects for each rule with in the feature type of the style. Each ``rule`` 
+objects for each rule within the feature type of the style. Each ``rule`` 
 contains the metadata associated with the rule, any ``filter`` element and an array
 of ``symbolizer`` objects. 
 
@@ -373,8 +387,8 @@ Symbolizers
 
   A point symbolizer will be represented as a series of elements containing
   metadata and an array of ``graphics`` symbols (see :ref:`here <sld_reference_graphic>`) , these can be well known ``marks`` or
-  external graphics. The point symbolizer also provides an "url" element which
-  allows a client to make a request back to GeoServer to fetch a png image of
+  external graphics. The point symbolizer also provides an "URL" element which
+  allows a client to make a request back to GeoServer to fetch a PNG image of
   the point symbol.
 
 

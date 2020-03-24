@@ -5,9 +5,11 @@
  */
 package org.geoserver.wfs.xml;
 
-import static org.geoserver.ows.util.ResponseUtils.*;
+import static org.geoserver.ows.util.ResponseUtils.buildURL;
+import static org.geoserver.ows.util.ResponseUtils.params;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -16,6 +18,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.Level;
@@ -51,9 +55,11 @@ import org.geoserver.platform.resource.Resource.Type;
 import org.geoserver.wfs.GMLInfo;
 import org.geoserver.wfs.WFSInfo;
 import org.geotools.feature.NameImpl;
+import org.geotools.feature.type.Types;
 import org.geotools.gml2.GMLConfiguration;
 import org.geotools.gml3.v3_2.GML;
 import org.geotools.wfs.v2_0.WFS;
+import org.geotools.xlink.XLINK;
 import org.geotools.xs.XS;
 import org.geotools.xsd.Configuration;
 import org.geotools.xsd.Schemas;
@@ -196,7 +202,7 @@ public abstract class FeatureTypeSchemaBuilder {
 
             if (!simple) {
                 // complex features may belong to different workspaces
-                addAllNamespacesFromCatalog(schema);
+                addRequiredNamespaces(featureTypeInfos, schema);
             }
 
             // would result in some xsd:include or xsd:import if schema location is specified
@@ -231,7 +237,7 @@ public abstract class FeatureTypeSchemaBuilder {
             } catch (IOException e) {
                 logger.warning(
                         "Unable to get schema location for feature type '"
-                                + featureTypeInfos[0].getPrefixedName()
+                                + featureTypeInfos[0].prefixedName()
                                 + "'. Reason: '"
                                 + e.getMessage()
                                 + "'. Building the schema manually instead.");
@@ -257,7 +263,7 @@ public abstract class FeatureTypeSchemaBuilder {
         } else {
             // if complex features, add all namespaces
             if (!isSimpleFeature(featureTypeInfos)) {
-                addAllNamespacesFromCatalog(schema);
+                addRequiredNamespaces(featureTypeInfos, schema);
             }
 
             // different namespaces, write out import statements
@@ -302,7 +308,7 @@ public abstract class FeatureTypeSchemaBuilder {
                                     includes);
                         }
                     } else {
-                        typeNames.append(info.getPrefixedName()).append(",");
+                        typeNames.append(info.prefixedName()).append(",");
                     }
                 }
                 if (typeNames.length() > 0) {
@@ -364,20 +370,63 @@ public abstract class FeatureTypeSchemaBuilder {
         return schema;
     }
 
-    private void addAllNamespacesFromCatalog(XSDSchema schema) {
-        WorkspaceInfo localWorkspace = LocalWorkspace.get();
+    private void addRequiredNamespaces(FeatureTypeInfo[] featureTypeInfos, XSDSchema schema) {
+        final WorkspaceInfo localWorkspace = LocalWorkspace.get();
         if (localWorkspace != null) {
             // deactivate workspace filtering
             LocalWorkspace.remove();
         }
-        // add secondary namespaces from the full catalog
         try {
-            for (NamespaceInfo nameSpaceinfo : catalog.getNamespaces()) {
-                if (!schema.getQNamePrefixToNamespaceMap().containsKey(nameSpaceinfo.getPrefix())) {
-                    schema.getQNamePrefixToNamespaceMap()
-                            .put(nameSpaceinfo.getPrefix(), nameSpaceinfo.getURI());
-                }
+            // Add only required namespaces from mappings
+            final Map<String, String> schemaNamespacesMap = schema.getQNamePrefixToNamespaceMap();
+            final List<NamespaceInfo> catalogNamespaces = catalog.getNamespaces();
+            for (FeatureTypeInfo featureTypeInfo : featureTypeInfos) {
+                Object mapObject =
+                        featureTypeInfo
+                                .getFeatureType()
+                                .getUserData()
+                                .get(Types.DECLARED_NAMESPACES_MAP);
+                if (!(mapObject instanceof Map)) continue;
+                final Map<String, String> featureTypeNamespaces = (Map<String, String>) mapObject;
+                featureTypeNamespaces
+                        .entrySet()
+                        .forEach(
+                                entry -> {
+                                    final String uri = entry.getValue();
+                                    // check if URI is already taken
+                                    if (schemaNamespacesMap.containsValue(uri)) return;
+                                    // exists a prefix available in catalog for this URI?
+                                    final Optional<NamespaceInfo> nsFromCatalog =
+                                            catalogNamespaces
+                                                    .stream()
+                                                    .filter(
+                                                            nsi ->
+                                                                    Objects.equals(
+                                                                            nsi.getURI(), uri))
+                                                    .findFirst();
+                                    final String prefix =
+                                            nsFromCatalog
+                                                    .map(NamespaceInfo::getPrefix)
+                                                    .orElse(entry.getKey());
+                                    schemaNamespacesMap.put(prefix, uri);
+                                });
             }
+            // Check if xlink namespace was added, otherwise add it, it is a required namespace
+            if (!schemaNamespacesMap.containsValue(XLINK.NAMESPACE)) {
+                Optional<NamespaceInfo> xlinkNSFromCatalog =
+                        catalogNamespaces
+                                .stream()
+                                .filter(x -> XLINK.NAMESPACE.equals(x.getURI()))
+                                .findFirst();
+                schemaNamespacesMap.put(
+                        xlinkNSFromCatalog
+                                .map(NamespaceInfo::getPrefix)
+                                .orElse(WFSXmlUtils.XLINK_DEFAULT_PREFIX),
+                        XLINK.NAMESPACE);
+            }
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Unable to add namespaces", e);
+            throw new UncheckedIOException(e);
         } finally {
             // make sure local workspace filtering is repositioned
             LocalWorkspace.set(localWorkspace);
@@ -762,10 +811,6 @@ public abstract class FeatureTypeSchemaBuilder {
      *
      * <p>A side-effect of calling this method is that the constructed type and any concrete nested
      * complex types are added to the schema.
-     *
-     * @param complexType
-     * @param schema
-     * @param factory
      */
     private XSDComplexTypeDefinition buildComplexSchemaContent(
             ComplexType complexType, XSDSchema schema, XSDFactory factory) {
@@ -954,7 +999,13 @@ public abstract class FeatureTypeSchemaBuilder {
 
         protected XSDSchema gmlSchema() {
             if (gml2Schema == null) {
-                gml2Schema = xmlConfiguration.schema();
+                XSDSchema result;
+                try {
+                    result = xmlConfiguration.getXSD().getSchema();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                gml2Schema = result;
             }
 
             return gml2Schema;
@@ -999,7 +1050,11 @@ public abstract class FeatureTypeSchemaBuilder {
         }
 
         private XSDSchema createGml3Schema() {
-            return xmlConfiguration.schema();
+            try {
+                return xmlConfiguration.getXSD().getSchema();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         protected boolean filterAttributeType(AttributeDescriptor attribute) {
@@ -1016,7 +1071,7 @@ public abstract class FeatureTypeSchemaBuilder {
 
     public static class GML32 extends GML3 {
         /** Cached gml32 schema */
-        private static XSDSchema gml32Schema;
+        private static volatile XSDSchema gml32Schema;
 
         public GML32(GeoServer gs) {
             super(gs);
@@ -1046,7 +1101,11 @@ public abstract class FeatureTypeSchemaBuilder {
 
         protected XSDSchema gmlSchema() {
             if (gml32Schema == null) {
-                gml32Schema = createGml32Schema();
+                synchronized (FeatureTypeSchemaBuilder.class) {
+                    if (gml32Schema == null) {
+                        gml32Schema = createGml32Schema();
+                    }
+                }
             }
 
             return gml32Schema;

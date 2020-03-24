@@ -40,6 +40,8 @@ public abstract class WMSDimensionsTestSupport extends WMSTestSupport {
     protected static QName WATTEMP = new QName(MockData.SF_URI, "watertemp", MockData.SF_PREFIX);
     protected static QName TIMERANGES =
             new QName(MockData.SF_URI, "timeranges", MockData.SF_PREFIX);
+    protected static QName TIMESERIES =
+            new QName(MockData.SF_URI, "timeseries", MockData.SF_PREFIX);
 
     protected static final String UNITS = "foot";
     protected static final String UNIT_SYMBOL = "ft";
@@ -136,6 +138,9 @@ public abstract class WMSDimensionsTestSupport extends WMSTestSupport {
                 "temperature", "temperature.sld", WMSDimensionsTestSupport.class, catalog);
         Map propertyMap = new HashMap();
         propertyMap.put(LayerProperty.STYLE, "temperature");
+        // a raster layer with times
+        testData.addRasterLayer(
+                TIMESERIES, "timeseries.zip", null, null, SystemTestData.class, catalog);
         // a raster layer with time and elevation
         testData.addRasterLayer(
                 WATTEMP, "watertemp.zip", null, propertyMap, SystemTestData.class, catalog);
@@ -144,13 +149,7 @@ public abstract class WMSDimensionsTestSupport extends WMSTestSupport {
                 TIMERANGES, "timeranges.zip", null, null, SystemTestData.class, catalog);
     }
 
-    /**
-     * Checks two dates are the same, within a given tolerance.
-     *
-     * @param d1
-     * @param d2
-     * @param tolerance
-     */
+    /** Checks two dates are the same, within a given tolerance. */
     protected static void assertDateEquals(java.util.Date d1, java.util.Date d2, long tolerance) {
         long difference = Math.abs(d1.getTime() - d2.getTime());
         assertTrue(difference <= tolerance);
@@ -190,11 +189,7 @@ public abstract class WMSDimensionsTestSupport extends WMSTestSupport {
         getCatalog().save(info);
     }
 
-    /**
-     * Checks that the last HTTP response had the expected number of "Warning" headers
-     *
-     * @param expectedValue
-     */
+    /** Checks that the last HTTP response had the expected number of "Warning" headers */
     protected void assertWarningCount(int expectedValue) {
         MockHttpServletResponse response = getLastResponse();
         List<Object> values = response.getHeaderValues(HttpHeaders.WARNING);
@@ -206,9 +201,6 @@ public abstract class WMSDimensionsTestSupport extends WMSTestSupport {
     /**
      * Asserts that the specified nearest value has been used and check the corresponding HTTP
      * warning
-     *
-     * @param layerId
-     * @param expectedValue
      */
     protected void assertNearestTimeWarning(String layerId, String expectedValue) {
         String expected =
@@ -232,9 +224,6 @@ public abstract class WMSDimensionsTestSupport extends WMSTestSupport {
     /**
      * Asserts that the specified nearest value has been used and check the corresponding HTTP
      * warning
-     *
-     * @param layerId
-     * @param expectedValue
      */
     protected void assertNoNearestWarning(String layerId, String dimension) {
         String expected = "99 No nearest value found on " + layerId + ": " + dimension;

@@ -6,6 +6,7 @@
 package org.geoserver.catalog.impl;
 
 import java.io.IOException;
+import java.util.Date;
 import org.geoserver.catalog.*;
 import org.geotools.styling.Style;
 import org.geotools.styling.StyledLayerDescriptor;
@@ -19,7 +20,6 @@ public class StyleInfoImpl implements StyleInfo {
 
     protected WorkspaceInfo workspace;
 
-    @Deprecated
     // not used, maininting this property for xstream backward compatability
     protected Version sldVersion = null;
 
@@ -32,6 +32,12 @@ public class StyleInfoImpl implements StyleInfo {
     protected LegendInfo legend;
 
     protected transient Catalog catalog;
+
+    protected MetadataMap metadata = new MetadataMap();
+
+    protected Date dateCreated;
+
+    protected Date dateModified;
 
     protected StyleInfoImpl() {}
 
@@ -71,14 +77,6 @@ public class StyleInfoImpl implements StyleInfo {
         this.workspace = workspace;
     }
 
-    public Version getSLDVersion() {
-        return getFormatVersion();
-    }
-
-    public void setSLDVersion(Version v) {
-        setFormatVersion(v);
-    }
-
     public String getFormat() {
         return format;
     }
@@ -104,6 +102,11 @@ public class StyleInfoImpl implements StyleInfo {
     }
 
     public Style getStyle() throws IOException {
+        // for capability document request
+        // remote style does not exist in local catalog
+        // do not look for this style inside ResourcePool
+        if (metadata != null)
+            if (metadata.containsKey("isRemote")) return WMSLayerInfoImpl.getStyleInfo(this);
         return catalog.getResourcePool().getStyle(this);
     }
 
@@ -117,6 +120,21 @@ public class StyleInfoImpl implements StyleInfo {
 
     public void setLegend(LegendInfo legend) {
         this.legend = legend;
+    }
+
+    @Override
+    public MetadataMap getMetadata() {
+        // non nullable
+        checkMetadataNotNull();
+        return metadata;
+    }
+
+    public void setMetadata(MetadataMap metadata) {
+        this.metadata = metadata;
+    }
+
+    private void checkMetadataNotNull() {
+        if (metadata == null) metadata = new MetadataMap();
     }
 
     public void accept(CatalogVisitor visitor) {
@@ -160,6 +178,7 @@ public class StyleInfoImpl implements StyleInfo {
         if (languageVersion == null) {
             if (other.getFormatVersion() != null) return false;
         } else if (!languageVersion.equals(other.getFormatVersion())) return false;
+
         return true;
     }
 
@@ -172,7 +191,16 @@ public class StyleInfoImpl implements StyleInfo {
                 .toString();
     }
 
-    private Object readResolve() {
+    @Override
+    public String prefixedName() {
+        if (workspace != null) {
+            return workspace.getName() + ":" + getName();
+        } else {
+            return getName();
+        }
+    }
+
+    protected Object readResolve() {
         // this check is here to enable smooth migration from old configurations that don't have
         // the version property, and a transition from the deprecated sldVersion property
 
@@ -191,11 +219,22 @@ public class StyleInfoImpl implements StyleInfo {
     }
 
     @Override
-    public String prefixedName() {
-        if (workspace != null) {
-            return workspace.getName() + ":" + getName();
-        } else {
-            return getName();
-        }
+    public Date getDateModified() {
+        return this.dateModified;
+    }
+
+    @Override
+    public Date getDateCreated() {
+        return this.dateCreated;
+    }
+
+    @Override
+    public void setDateCreated(Date dateCreated) {
+        this.dateCreated = dateCreated;
+    }
+
+    @Override
+    public void setDateModified(Date dateModified) {
+        this.dateModified = dateModified;
     }
 }

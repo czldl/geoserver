@@ -6,8 +6,7 @@
 package org.geoserver.wps.gs;
 
 import com.google.common.base.Splitter;
-import java.awt.RenderingHints;
-import java.awt.Transparency;
+import java.awt.*;
 import java.awt.image.ColorModel;
 import java.awt.image.ComponentColorModel;
 import java.awt.image.IndexColorModel;
@@ -46,7 +45,6 @@ import org.geotools.process.factory.DescribeParameter;
 import org.geotools.process.factory.DescribeProcess;
 import org.geotools.process.factory.DescribeResult;
 import org.geotools.process.factory.DescribeResults;
-import org.geotools.process.gs.GSProcess;
 import org.geotools.referencing.CRS;
 import org.geotools.util.Utilities;
 import org.geotools.util.logging.Logging;
@@ -65,7 +63,7 @@ import org.opengis.referencing.crs.CoordinateReferenceSystem;
     title = "Georectify Coverage",
     description = "Georectifies a raster via Ground Control Points using gdal_warp"
 )
-public class GeorectifyCoverage implements GSProcess {
+public class GeorectifyCoverage implements GeoServerProcess {
 
     static final Logger LOGGER = Logging.getLogger(GeorectifyCoverage.class);
 
@@ -341,8 +339,6 @@ public class GeorectifyCoverage implements GSProcess {
      * input data of the process involved in rendering. This method will be called only if the input
      * data is a feature collection.
      *
-     * @param targetQuery
-     * @param gridGeometry
      * @return The transformed query, or null if no inversion is possible/meaningful
      */
     public Query invertQuery(Query targetQuery, GridGeometry gridGeometry) {
@@ -354,8 +350,6 @@ public class GeorectifyCoverage implements GSProcess {
      * the input data of the process involved in rendering. This method will be called only if the
      * input data is a grid coverage or a grid coverage reader
      *
-     * @param targetQuery
-     * @param gridGeometry
      * @return The transformed query, or null if no inversion is possible/meaningful
      */
     public GridGeometry invertGridGeometry(Query targetQuery, GridGeometry targetGridGeometry) {
@@ -368,7 +362,6 @@ public class GeorectifyCoverage implements GSProcess {
      *
      * @param image the to be stored.
      * @return the {@link File} storing the image.
-     * @throws IOException
      */
     private File storeImage(final RenderedImage image, final File tempFolder) throws IOException {
         File file = File.createTempFile("readCoverage", ".tif", tempFolder);
@@ -382,7 +375,6 @@ public class GeorectifyCoverage implements GSProcess {
      * @param width the final image's width
      * @param height the final image's height
      * @param targetCRS the target coordinate reference system
-     * @throws IOException
      */
     private File warpFile(
             final File originalFile,
@@ -463,33 +455,22 @@ public class GeorectifyCoverage implements GSProcess {
     }
 
     private static String getError(File logFile) throws IOException {
-        InputStream stream = null;
-        InputStreamReader streamReader = null;
-        BufferedReader reader = null;
         StringBuilder message = new StringBuilder();
-        try {
-            stream = new FileInputStream(logFile);
-            streamReader = new InputStreamReader(stream);
-            reader = new BufferedReader(streamReader);
+        try (InputStream stream = new FileInputStream(logFile);
+                InputStreamReader streamReader = new InputStreamReader(stream);
+                BufferedReader reader = new BufferedReader(streamReader)) {
             String strLine;
             while ((strLine = reader.readLine()) != null) {
                 message.append(strLine);
             }
             return message.toString();
         } finally {
-            IOUtils.closeQuietly(reader);
-            IOUtils.closeQuietly(streamReader);
-            IOUtils.closeQuietly(stream);
             // TODO: look for a better delete
             deleteFile(logFile);
         }
     }
 
-    /**
-     * Parse the bounding box to be used by gdalwarp command
-     *
-     * @param boundingBox
-     */
+    /** Parse the bounding box to be used by gdalwarp command */
     @SuppressWarnings("serial")
     private static List<String> parseBBox(Envelope re) {
         if (re == null) {
@@ -522,7 +503,6 @@ public class GeorectifyCoverage implements GSProcess {
      * @param originalFilePath the path of the file referring to the original image.
      * @param gcp the Ground Control Points option to be attached to the translating command.
      * @return a File containing the translated dataset.
-     * @throws IOException
      */
     private File addGroundControlPoints(
             final String originalFilePath, final List<String> gcp, final List<String> parameters)
@@ -594,10 +574,8 @@ public class GeorectifyCoverage implements GSProcess {
         }
         builder.redirectErrorStream(true);
 
-        OutputStream log = null;
         int exitValue = 0;
-        try {
-            log = new FileOutputStream(logFile);
+        try (OutputStream log = new FileOutputStream(logFile)) {
             Process p = builder.start();
             IOUtils.copy(p.getInputStream(), log);
 
@@ -632,7 +610,6 @@ public class GeorectifyCoverage implements GSProcess {
             if (logFile != null) {
                 logFile.delete();
             }
-            IOUtils.closeQuietly(log);
         }
     }
 
@@ -658,10 +635,7 @@ public class GeorectifyCoverage implements GSProcess {
         }
     }
 
-    /**
-     * @param gcps
-     * @param gcpNum
-     */
+    /** */
     private List<String> parseGcps(String gcps, int[] gcpNum) {
         Matcher gcpMatcher = GCP_PATTERN.matcher(gcps);
         // if(!gcpMatcher.matches()) {

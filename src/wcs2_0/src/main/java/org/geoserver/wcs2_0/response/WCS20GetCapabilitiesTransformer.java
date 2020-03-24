@@ -27,6 +27,7 @@ import net.opengis.wcs20.GetCapabilitiesType;
 import org.geoserver.ExtendedCapabilitiesProvider;
 import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.KeywordInfo;
+import org.geoserver.catalog.MetadataLinkInfo;
 import org.geoserver.config.ContactInfo;
 import org.geoserver.config.GeoServer;
 import org.geoserver.config.ResourceErrorHandling;
@@ -47,6 +48,7 @@ import org.geotools.xml.transform.TransformerBase;
 import org.geotools.xml.transform.Translator;
 import org.opengis.geometry.BoundingBox;
 import org.vfny.geoserver.global.CoverageInfoLabelComparator;
+import org.vfny.geoserver.util.ResponseUtils;
 import org.vfny.geoserver.wcs.WcsException;
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
@@ -125,10 +127,11 @@ public class WCS20GetCapabilitiesTransformer extends TransformerBase {
             this.extensions = GeoServerExtensions.extensions(WCSExtendedCapabilitiesProvider.class);
             // register namespaces provided by extended capabilities
             NamespaceSupport namespaces = getNamespaceSupport();
-            namespaces.declarePrefix(
-                    "wcscrs", "http://www.opengis.net/wcs/service-extension/crs/1.0");
+            namespaces.declarePrefix("wcs", "http://www.opengis.net/wcs/2.0");
             namespaces.declarePrefix(
                     "int", "http://www.opengis.net/WCS_service-extension_interpolation/1.0");
+
+            namespaces.declarePrefix("crs", "http://www.opengis.net/wcs/crs/1.0");
 
             for (WCSExtendedCapabilitiesProvider cp : extensions) {
                 cp.registerNamespaces(namespaces);
@@ -294,12 +297,13 @@ public class WCS20GetCapabilitiesTransformer extends TransformerBase {
             } else {
                 codes = wcs.getSRS();
             }
+            start("crs:CrsMetadata");
             for (String code : codes) {
                 if (!code.equals("WGS84(DD)")) {
-                    element("wcscrs:crsSupported", "http://www.opengis.net/def/crs/EPSG/0/" + code);
+                    element("crs:crsSupported", "http://www.opengis.net/def/crs/EPSG/0/" + code);
                 }
             }
-
+            end("crs:CrsMetadata");
             // add the supported interpolation methods
             element(
                     "int:interpolationSupported",
@@ -624,12 +628,16 @@ public class WCS20GetCapabilitiesTransformer extends TransformerBase {
 
         private void handleCoverageSummary(CoverageInfo cv) throws Exception {
             start("wcs:CoverageSummary");
+            elementIfNotEmpty("ows:Title", cv.getTitle());
+            elementIfNotEmpty("ows:Abstract", cv.getDescription());
+            handleKeywords(cv.getKeywords());
             String covId = NCNameResourceCodec.encode(cv);
             element("wcs:CoverageId", covId);
             element("wcs:CoverageSubtype", "RectifiedGridCoverage"); // TODO make this parametric
 
             handleWGS84BoundingBox(cv.getLatLonBoundingBox());
             handleBoundingBox(cv.boundingBox());
+            cv.getMetadataLinks().forEach(this::handleMetadataLink);
 
             end("wcs:CoverageSummary");
         }
@@ -672,18 +680,26 @@ public class WCS20GetCapabilitiesTransformer extends TransformerBase {
             end("ows:BoundingBox");
         }
 
+        private void handleMetadataLink(MetadataLinkInfo mdl) {
+            if (isNotBlank(mdl.getContent())) {
+                String url = ResponseUtils.proxifyMetadataLink(mdl, request.getBaseUrl());
+                AttributesImpl attributes = new AttributesImpl();
+                if (isNotBlank(mdl.getAbout())) {
+                    attributes.addAttribute("", "about", "about", "", mdl.getAbout());
+                }
+                attributes.addAttribute("", "xlink:type", "xlink:type", "", "simple");
+                attributes.addAttribute("", "xlink:href", "xlink:href", "", url);
+                element("ows:Metadata", null, attributes);
+            }
+        }
+
         private void handleLanguages() {
             //            start("ows:Languages");
             //            // TODO
             //            end("ows:Languages");
         }
 
-        /**
-         * Writes the element if and only if the content is not null and not empty
-         *
-         * @param elementName
-         * @param content
-         */
+        /** Writes the element if and only if the content is not null and not empty */
         private void elementIfNotEmpty(String elementName, String content) {
             if (isNotBlank(content)) element(elementName, content);
         }

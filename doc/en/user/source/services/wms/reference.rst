@@ -119,6 +119,10 @@ They are fully documented in the :ref:`wms_vendor_parameters` section.
    * - ``format``
      - No
      - request the capabilities document in a certain format
+   * - ``rootLayer``
+     - No
+     - Flag to enable/disable the standard Root top level Layer element. Values are true or false. When false, the Root element will be included only if there are multiple top level layers, if there is only one, it will be the root layer itself.
+       When specified, will override the global WMS setting or layer / group setting for the same behaviour.
 
 
 A example GetCapabilities request is: ::
@@ -420,6 +424,9 @@ They are fully documented in the :ref:`wms_vendor_parameters` section.
    * - ``propertyName``
      - No
      - Feature properties to be returned
+   * - ``exclude_nodata_result``
+     - No
+     - When set to true, a *NaN* will be returned when the feature's queried pixel value is nodata.
 
 An example request for feature information from the ``topp:states`` layer in HTML format is: ::
 

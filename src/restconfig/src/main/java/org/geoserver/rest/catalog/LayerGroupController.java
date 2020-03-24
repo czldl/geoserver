@@ -27,6 +27,7 @@ import org.geoserver.catalog.LayerGroupInfo;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.StyleInfo;
+import org.geoserver.catalog.impl.ResolvingProxy;
 import org.geoserver.config.util.XStreamPersister;
 import org.geoserver.rest.ObjectToMapWrapper;
 import org.geoserver.rest.ResourceNotFoundException;
@@ -45,9 +46,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -132,6 +130,11 @@ public class LayerGroupController extends AbstractCatalogController {
             throw new RestException("layer group must not be empty", HttpStatus.BAD_REQUEST);
         }
 
+        // force resolve layers because catalog may leave null references
+        for (int i = 0; i < lg.getLayers().size(); i++) {
+            lg.getLayers().set(i, ResolvingProxy.resolve(catalog, lg.getLayers().get(i)));
+        }
+
         if (lg.getBounds() == null) {
             LOGGER.fine("Auto calculating layer group bounds");
             new CatalogBuilder(catalog).calculateLayerGroupBounds(lg);
@@ -155,7 +158,7 @@ public class LayerGroupController extends AbstractCatalogController {
                 builder.path("/layergroups/{layerGroupName}").buildAndExpand(layerGroupName);
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.setLocation(uriComponents.toUri());
-
+        httpHeaders.setContentType(MediaType.TEXT_PLAIN);
         return new ResponseEntity<>(layerGroupName, httpHeaders, HttpStatus.CREATED);
     }
 
@@ -243,13 +246,7 @@ public class LayerGroupController extends AbstractCatalogController {
 
                     @Override
                     protected CatalogInfo getCatalogObject() {
-                        Map<String, String> uriTemplateVars =
-                                (Map<String, String>)
-                                        RequestContextHolder.getRequestAttributes()
-                                                .getAttribute(
-                                                        HandlerMapping
-                                                                .URI_TEMPLATE_VARIABLES_ATTRIBUTE,
-                                                        RequestAttributes.SCOPE_REQUEST);
+                        Map<String, String> uriTemplateVars = getURITemplateVariables();
                         String workspace = uriTemplateVars.get("workspaceName");
                         String layerGroup = uriTemplateVars.get("layerGroupName");
 

@@ -105,6 +105,15 @@ public class WMSAdminPage extends BaseServiceAdminPage<WMSInfo> {
         form.add(new TextField<String>("rootLayerTitle"));
         form.add(new TextArea<String>("rootLayerAbstract"));
 
+        PropertyModel metadataModel = new PropertyModel(info, "metadata");
+        MapModel rootLayerEnabled =
+                defaultedModel(
+                        metadataModel,
+                        WMS.ROOT_LAYER_IN_CAPABILITIES_KEY,
+                        WMS.ROOT_LAYER_IN_CAPABILITIES_DEFAULT);
+        CheckBox rootLayerEnabledField = new CheckBox("rootLayerEnabled", rootLayerEnabled);
+        form.add(rootLayerEnabledField);
+
         // authority URLs and Identifiers for the root layer
         LayerAuthoritiesAndIdentifiersPanel authAndIds;
         authAndIds = new LayerAuthoritiesAndIdentifiersPanel("authoritiesAndIds", true, info);
@@ -130,7 +139,6 @@ public class WMSAdminPage extends BaseServiceAdminPage<WMSInfo> {
                     }
                 });
         // advanced projection handling
-        PropertyModel metadataModel = new PropertyModel(info, "metadata");
         MapModel aphEnabled =
                 defaultedModel(
                         metadataModel, WMS.ADVANCED_PROJECTION_KEY, WMS.ENABLE_ADVANCED_PROJECTION);
@@ -140,6 +148,20 @@ public class WMSAdminPage extends BaseServiceAdminPage<WMSInfo> {
                 defaultedModel(metadataModel, WMS.MAP_WRAPPING_KEY, WMS.ENABLE_MAP_WRAPPING);
         CheckBox aphWrapField = new CheckBox("aph.wrap", aphWrap);
         form.add(aphWrapField);
+        MapModel aphDensify =
+                defaultedModel(
+                        metadataModel,
+                        WMS.ADVANCED_PROJECTION_DENSIFICATION_KEY,
+                        WMS.ENABLE_ADVANCED_PROJECTION_DENSIFICATION);
+        CheckBox aphDensifyField = new CheckBox("aph.densify", aphDensify);
+        form.add(aphDensifyField);
+        MapModel aphHeuristic =
+                defaultedModel(
+                        metadataModel,
+                        WMS.DATELINE_WRAPPING_HEURISTIC_KEY,
+                        WMS.DISABLE_DATELINE_WRAPPING_HEURISTIC);
+        CheckBox aphHeuristicField = new CheckBox("aph.dlh", aphHeuristic);
+        form.add(aphHeuristicField);
 
         // general
         form.add(

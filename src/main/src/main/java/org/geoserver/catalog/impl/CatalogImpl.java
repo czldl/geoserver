@@ -6,6 +6,7 @@
 package org.geoserver.catalog.impl;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
+import org.apache.commons.io.FilenameUtils;
 import org.geoserver.GeoServerConfigurationLock;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CatalogBuilder;
@@ -44,9 +46,12 @@ import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.PublishedType;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.ResourcePool;
+import org.geoserver.catalog.SLDHandler;
 import org.geoserver.catalog.SLDNamedLayerValidator;
 import org.geoserver.catalog.StoreInfo;
+import org.geoserver.catalog.StyleHandler;
 import org.geoserver.catalog.StyleInfo;
+import org.geoserver.catalog.Styles;
 import org.geoserver.catalog.ValidationResult;
 import org.geoserver.catalog.WMSLayerInfo;
 import org.geoserver.catalog.WMSStoreInfo;
@@ -54,20 +59,26 @@ import org.geoserver.catalog.WMTSLayerInfo;
 import org.geoserver.catalog.WMTSStoreInfo;
 import org.geoserver.catalog.WorkspaceInfo;
 import org.geoserver.catalog.event.CatalogAddEvent;
+import org.geoserver.catalog.event.CatalogBeforeAddEvent;
 import org.geoserver.catalog.event.CatalogEvent;
 import org.geoserver.catalog.event.CatalogListener;
 import org.geoserver.catalog.event.CatalogModifyEvent;
 import org.geoserver.catalog.event.CatalogPostModifyEvent;
 import org.geoserver.catalog.event.CatalogRemoveEvent;
 import org.geoserver.catalog.event.impl.CatalogAddEventImpl;
+import org.geoserver.catalog.event.impl.CatalogBeforeAddEventImpl;
 import org.geoserver.catalog.event.impl.CatalogModifyEventImpl;
 import org.geoserver.catalog.event.impl.CatalogPostModifyEventImpl;
 import org.geoserver.catalog.event.impl.CatalogRemoveEventImpl;
 import org.geoserver.catalog.util.CloseableIterator;
+import org.geoserver.config.GeoServerDataDirectory;
 import org.geoserver.ows.util.OwsUtils;
 import org.geoserver.platform.ExtensionPriority;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
+import org.geoserver.platform.resource.Resource;
+import org.geoserver.platform.resource.Resource.Type;
+import org.geoserver.platform.resource.Resources;
 import org.geotools.styling.StyledLayerDescriptor;
 import org.geotools.util.SuppressFBWarnings;
 import org.geotools.util.logging.Logging;
@@ -162,7 +173,9 @@ public class CatalogImpl implements Catalog {
         // TODO: remove synchronized block, need transactions
         StoreInfo added;
         synchronized (facade) {
-            added = facade.add(resolve(store));
+            StoreInfo resolved = resolve(store);
+            beforeadded(resolved);
+            added = facade.add(resolved);
 
             // if there is no default store use this one as the default
             if (getDefaultDataStore(store.getWorkspace()) == null
@@ -393,7 +406,7 @@ public class CatalogImpl implements Catalog {
         }
         ResourceInfo resolved = resolve(resource);
         validate(resolved, true);
-
+        beforeadded(resolved);
         ResourceInfo added = facade.add(resolved);
         added(added);
     }
@@ -656,7 +669,7 @@ public class CatalogImpl implements Catalog {
                 throw new IllegalArgumentException(msg);
             }
         }
-
+        beforeadded(layer);
         LayerInfo added = facade.add(layer);
         added(added);
     }
@@ -836,7 +849,7 @@ public class CatalogImpl implements Catalog {
                 layerGroup.getStyles().add(null);
             }
         }
-
+        beforeadded(layerGroup);
         LayerGroupInfo added = facade.add(layerGroup);
         added(added);
     }
@@ -1010,7 +1023,7 @@ public class CatalogImpl implements Catalog {
     public void remove(LayerGroupInfo layerGroup) {
         // ensure no references to the layer group
         for (LayerGroupInfo lg : facade.getLayerGroups()) {
-            if (lg.getLayers().contains(layerGroup) || layerGroup.equals(lg.getRootLayer())) {
+            if (lg.getLayers().contains(layerGroup)) {
                 String msg =
                         "Unable to delete layer group referenced by layer group '"
                                 + lg.getName()
@@ -1108,6 +1121,7 @@ public class CatalogImpl implements Catalog {
     }
 
     public void add(MapInfo map) {
+        beforeadded(map);
         MapInfo added = facade.add(resolve(map));
         added(added);
     }
@@ -1155,6 +1169,7 @@ public class CatalogImpl implements Catalog {
         NamespaceInfo added;
         synchronized (facade) {
             final NamespaceInfo resolved = resolve(namespace);
+            beforeadded(namespace);
             added = facade.add(resolved);
             if (getDefaultNamespace() == null) {
                 setDefaultNamespace(resolved);
@@ -1216,6 +1231,7 @@ public class CatalogImpl implements Catalog {
         return postValidate(namespace, isNew);
     }
 
+    @SuppressFBWarnings("NP_NULL_PARAM_DEREF") // I don't see this happening...
     public void remove(NamespaceInfo namespace) {
         if (!getResourcesByNamespace(namespace, ResourceInfo.class).isEmpty()) {
             throw new IllegalArgumentException("Unable to delete non-empty namespace.");
@@ -1286,6 +1302,7 @@ public class CatalogImpl implements Catalog {
 
         WorkspaceInfo added;
         synchronized (facade) {
+            beforeadded(workspace);
             added = facade.add(workspace);
             // if there is no default workspace use this one as the default
             if (getDefaultWorkspace() == null) {
@@ -1324,6 +1341,7 @@ public class CatalogImpl implements Catalog {
         return postValidate(workspace, isNew);
     }
 
+    @SuppressFBWarnings("NP_NULL_PARAM_DEREF") // I don't see this happening...
     public void remove(WorkspaceInfo workspace) {
         // JD: maintain the link between namespace and workspace, remove this when this is no
         // longer necessary
@@ -1477,6 +1495,8 @@ public class CatalogImpl implements Catalog {
     public void add(StyleInfo style) {
         style = resolve(style);
         validate(style, true);
+        // set creation time before persisting
+        beforeadded(style);
         StyleInfo added = facade.add(style);
         added(added);
     }
@@ -1554,8 +1574,42 @@ public class CatalogImpl implements Catalog {
     }
 
     public void save(StyleInfo style) {
+        ModificationProxy h = (ModificationProxy) Proxy.getInvocationHandler(style);
         validate(style, false);
+
+        // here we handle name changes
+        int i = h.getPropertyNames().indexOf("name");
+        if (i > -1 && !h.getNewValues().get(i).equals(h.getOldValues().get(i))) {
+            String newName = (String) h.getNewValues().get(i);
+            try {
+                renameStyle(style, newName);
+            } catch (IOException e) {
+                LOGGER.log(Level.SEVERE, "Failed to rename style file along with name.", e);
+            }
+        }
+
         facade.save(style);
+    }
+
+    private void renameStyle(StyleInfo s, String newName) throws IOException {
+        // rename style definition file
+        Resource style = new GeoServerDataDirectory(resourceLoader).style(s);
+        StyleHandler format = Styles.handler(s.getFormat());
+
+        Resource target = Resources.uniqueResource(style, newName, format.getFileExtension());
+        style.renameTo(target);
+        s.setFilename(target.name());
+
+        // rename generated sld if appropriate
+        if (!SLDHandler.FORMAT.equals(format.getFormat())) {
+            Resource sld = style.parent().get(FilenameUtils.getBaseName(style.name()) + ".sld");
+            if (sld.getType() == Type.RESOURCE) {
+                LOGGER.fine("Renaming style resource " + s.getName() + " to " + newName);
+
+                Resource generated = Resources.uniqueResource(sld, newName, "sld");
+                sld.renameTo(generated);
+            }
+        }
     }
 
     public StyleInfo detach(StyleInfo style) {
@@ -1614,8 +1668,18 @@ public class CatalogImpl implements Catalog {
         fireAdded(object);
     }
 
+    protected void beforeadded(CatalogInfo object) {
+        fireBeforeAdded(object);
+    }
+
     protected void removed(CatalogInfo object) {
         fireRemoved(object);
+    }
+
+    public void fireBeforeAdded(CatalogInfo object) {
+        CatalogBeforeAddEventImpl event = new CatalogBeforeAddEventImpl();
+        event.setSource(object);
+        event(event);
     }
 
     public void fireAdded(CatalogInfo object) {
@@ -1660,6 +1724,7 @@ public class CatalogImpl implements Catalog {
         for (Iterator l = listeners.iterator(); l.hasNext(); ) {
             try {
                 CatalogListener listener = (CatalogListener) l.next();
+
                 if (event instanceof CatalogAddEvent) {
                     listener.handleAddEvent((CatalogAddEvent) event);
                 } else if (event instanceof CatalogRemoveEvent) {
@@ -1668,6 +1733,8 @@ public class CatalogImpl implements Catalog {
                     listener.handleModifyEvent((CatalogModifyEvent) event);
                 } else if (event instanceof CatalogPostModifyEvent) {
                     listener.handlePostModifyEvent((CatalogPostModifyEvent) event);
+                } else if (event instanceof CatalogBeforeAddEvent) {
+                    listener.handlePreAddEvent((CatalogBeforeAddEvent) event);
                 }
             } catch (Throwable t) {
                 if (t instanceof CatalogException && toThrow == null) {
@@ -1780,8 +1847,6 @@ public class CatalogImpl implements Catalog {
     /**
      * We don't want the world to be able and call this without going trough {@link
      * #resolve(ResourceInfo)}
-     *
-     * @param featureType
      */
     private FeatureTypeInfo resolve(FeatureTypeInfo featureType) {
         FeatureTypeInfoImpl ft = (FeatureTypeInfoImpl) featureType;
@@ -1987,7 +2052,11 @@ public class CatalogImpl implements Catalog {
                             + sortOrder.getPropertyName()
                             + " in-process sorting is pending implementation");
         }
-        return facade.list(of, filter, offset, count, sortOrder);
+        if (sortOrder != null) {
+            return facade.list(of, filter, offset, count, sortOrder);
+        } else {
+            return facade.list(of, filter, offset, count);
+        }
     }
 
     @Override

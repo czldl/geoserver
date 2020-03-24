@@ -17,9 +17,33 @@ public final class RuleBuilder {
     private String transform;
     private Integer remove;
     private String combine;
+    private Boolean repeat;
 
     private Pattern matchPattern;
     private Pattern activationPattern;
+
+    public RuleBuilder copy(Rule other) {
+        this.id = other.getId();
+        this.activated = other.getActivated();
+        this.position = other.getPosition();
+        if (position != null) {
+            this.matchPattern =
+                    Pattern.compile(String.format("^(?:/[^/]*){%d}(/([^/]+)).*$", position));
+        } else {
+            this.matchPattern = null;
+        }
+        this.match = other.getMatch();
+        this.parameter = other.getParameter();
+        this.activation = other.getActivation();
+        if (activation != null) {
+            this.activationPattern = Pattern.compile(activation);
+        }
+        this.transform = other.getTransform();
+        this.remove = other.getRemove();
+        this.combine = other.getCombine();
+
+        return this;
+    }
 
     public RuleBuilder withId(String id) {
         this.id = id;
@@ -75,6 +99,13 @@ public final class RuleBuilder {
         return this;
     }
 
+    public RuleBuilder withRepeat(Boolean repeat) {
+        if (repeat != null) {
+            this.repeat = repeat;
+        }
+        return this;
+    }
+
     public Rule build() {
         Utils.checkCondition(
                 position == null || match == null,
@@ -98,6 +129,7 @@ public final class RuleBuilder {
                 transform,
                 remove,
                 combine,
+                Utils.withDefault(repeat, false),
                 matchPattern,
                 activationPattern);
     }

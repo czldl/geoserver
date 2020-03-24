@@ -5,15 +5,16 @@
 package org.geoserver.test;
 
 import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 
-import java.util.Objects;
 import net.sf.json.JSON;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
+import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
 /** Validates JSON output format for complex features. */
@@ -58,6 +59,17 @@ public final class GeoJsonOutputFormatWfsTest extends AbstractAppSchemaTestSuppo
                     "/test-data/stations/geoJson/stations.xsd",
                     "/test-data/stations/geoJson/stations.properties",
                     "/test-data/stations/geoJson/measurements.properties");
+            // add borehole
+            new Gsml32BoreholeMockData().getNamespaces().forEach((k, v) -> putNamespace(k, v));
+            addFeatureType(
+                    Gsml32BoreholeMockData.GSMLBH_PREFIX,
+                    "Borehole",
+                    "Gsml32Borehole.xml",
+                    "Gsml32Borehole.properties");
+            // tricky, the above registered GSML in a different URI and here we override
+            // works, but be on the lookout for issues when modifying the test
+            putNamespace(GSML_PREFIX, GSML_URI);
+            addFeatureType(GSML_PREFIX, "Borehole", "Borehole.xml", "Borehole.properties");
         }
     }
 
@@ -81,48 +93,131 @@ public final class GeoJsonOutputFormatWfsTest extends AbstractAppSchemaTestSuppo
                                 + "&typenames=st_gml32:Station_gml32&outputFormat=application/json");
         // validate the obtained response
         checkStation1Exists(response);
+        // check complex types with simple content that miss their value do not get a datatype
+        JSONObject station = getFeaturePropertiesById(response, "st.2");
+        assertThat(station, notNullValue());
+        JSONObject contact = station.getJSONObject("contact");
+        assertThat(contact.size(), is(3));
+        assertThat(contact.get("@mail"), is("st2@stations.org"));
+        JSONObject phone = contact.getJSONObject("phone");
+        assertThat(phone.size(), is(1));
+        assertFalse(phone.has("value"));
+        assertThat(phone.get("@timeZone"), is(""));
+        // check the linked features have been kept separate despite the shared element type
+        // A and B have max multiplicity > 1, C is ensured to be single
+        JSONObject featureLinkA = station.getJSONArray("featureLinkA").getJSONObject(0);
+        assertEquals("http://www.geoserver.org/featureA", featureLinkA.getString("@href"));
+        JSONObject featureLinkB = station.getJSONArray("featureLinkB").getJSONObject(0);
+        assertEquals("http://www.geoserver.org/featureB", featureLinkB.getString("@href"));
+        JSONObject featureLinkC = station.getJSONObject("featureLinkC");
+        assertEquals("http://www.geoserver.org/featureC", featureLinkC.getString("@href"));
     }
 
     /** Helper method that station 1 exists and was correctly encoded in the GeoJSON response. */
     private void checkStation1Exists(JSON geoJson) {
         // get the station from the response
-        JSONObject station = getStationPropertiesById(geoJson, "st.1");
+        JSONObject station = getFeaturePropertiesById(geoJson, "st.1");
         assertThat(station, notNullValue());
+        // validate the station name
+        JSONObject name = station.getJSONObject("name");
+        assertThat(name.size(), is(2));
+        assertThat(name.get("value"), is("station1"));
+        assertThat(name.get("@code"), is("st1"));
         // validate the station contact
-        JSONArray contact = station.getJSONArray("contact");
-        assertThat(contact.size(), is(2));
-        JSONArray phone = contact.getJSONObject(0).getJSONArray("phone");
+        JSONObject contact = station.getJSONObject("contact");
+        assertThat(contact.size(), is(3));
+        assertThat(contact.get("@mail"), is("st1@stations.org"));
+        JSONObject phone = contact.getJSONObject("phone");
         assertThat(phone.size(), is(2));
-        assertThat(phone.getString(0), is("95482156"));
-        JSONObject timezone = phone.getJSONObject(1);
-        assertThat(timezone.get("timeZone"), is("CET"));
+        assertThat(phone.get("value"), is("95482156"));
+        assertThat(phone.get("@timeZone"), is("CET"));
         // check the x-links for measurements exist
         JSONArray measurements = station.getJSONArray("measurements");
         assertThat(measurements.size(), is(2));
         assertThat(
-                measurements.getJSONObject(0).getString("href"),
+                measurements.getJSONObject(0).getString("@href"),
                 containsString("http://www.stations.org/ms."));
         assertThat(
-                measurements.getJSONObject(1).getString("href"),
+                measurements.getJSONObject(1).getString("@href"),
                 containsString("http://www.stations.org/ms."));
     }
 
-    /**
-     * Helper method that just extracts \ looks for a station in the provided GeoJSON response based
-     * on its ID.
-     */
-    private JSONObject getStationPropertiesById(JSON geoJson, String id) {
-        assertThat(geoJson, instanceOf(JSONObject.class));
-        JSONObject json = (JSONObject) geoJson;
-        JSONArray features = json.getJSONArray("features");
-        for (int i = 0; i < features.size(); i++) {
-            JSONObject feature = features.getJSONObject(i);
-            if (Objects.equals(id, feature.get("id"))) {
-                // we found the feature we are looking for
-                return feature.getJSONObject("properties");
-            }
-        }
-        // feature matching the provided ID not found
-        return null;
+    @Test
+    public void testSimpleContentTimeEncoding() throws Exception {
+        String path = "wfs?request=GetFeature&typename=gsmlbh:Borehole&outputFormat=json";
+        JSON json = getAsJSON(path);
+        JSONObject properties = getFeaturePropertiesById(json, "borehole.GA.17322");
+        assertThat(properties, is(notNullValue()));
+        JSONObject timeInstant =
+                getNestedObject(
+                        properties,
+                        "relatedSamplingFeature",
+                        "relatedSamplingFeature",
+                        "properties",
+                        "samplingTime",
+                        "TimeInstant");
+        // property file uses a java.util.Date, but the database uses a java.sql.Date, hence
+        // different encodings
+        assertThat(
+                timeInstant.getString("timePosition"),
+                CoreMatchers.anyOf(is("2014-07-02T00:00:00Z"), is("2014-07-02Z")));
+    }
+
+    @Test
+    public void testOneDimensionalEncoding() throws Exception {
+        String path = "wfs?request=GetFeature&typename=gsmlbh:Borehole&outputFormat=json";
+        JSON json = getAsJSON(path);
+        JSONObject properties = getFeaturePropertiesById(json, "borehole.GA.17322");
+        assertThat(properties, is(notNullValue()));
+        JSONObject samplingLocation =
+                getNestedObject(
+                        properties, "relatedSamplingFeature", "relatedSamplingFeature", "geometry");
+        JSONArray coordinates = samplingLocation.getJSONArray("coordinates");
+        assertThat(coordinates.size(), is(2));
+        JSONArray c1 = coordinates.getJSONArray(0);
+        assertThat(c1.size(), is(1));
+        assertEquals(57.9, c1.getDouble(0), 0.1);
+        JSONArray c2 = coordinates.getJSONArray(1);
+        assertThat(c2.size(), is(1));
+        assertEquals(66.5, c2.getDouble(0), 0.1);
+    }
+
+    @Test
+    public void testNestedFeatureEncoding() throws Exception {
+        String path = "wfs?request=GetFeature&typename=gsml:Borehole&outputFormat=json";
+        JSON json = getAsJSON(path);
+        JSONObject properties = getFeaturePropertiesById(json, "BOREHOLE.WTB5");
+        assertThat(properties, is(notNullValue()));
+
+        // check the featureType attribute is there
+        assertEquals("Borehole", properties.getString("@featureType"));
+
+        // get the nested feature
+        JSONObject collar = getNestedObject(properties, "collarLocation");
+        assertEquals("BOREHOLE.COLLAR.WTB5", collar.getString("id"));
+        assertEquals("Feature", collar.getString("type"));
+        JSONObject collarGeometry = collar.getJSONObject("geometry");
+        JSONArray coordinates = collarGeometry.getJSONArray("coordinates");
+        assertThat(coordinates.size(), is(2));
+        assertEquals(-28.4139, coordinates.getDouble(0), 0.1);
+        assertEquals(121.142, coordinates.getDouble(1), 0.1);
+
+        JSONObject collarProperties = collar.getJSONObject("properties");
+        assertEquals("BoreholeCollar", collarProperties.getString("@featureType"));
+        JSONObject indexData = properties.getJSONObject("indexData");
+        assertEquals("BoreholeDetails", indexData.getString("@dataType"));
+        assertEquals(
+                "BoundingShape", indexData.getJSONObject("coredInterval").getString("@dataType"));
+
+        // get the sampled feature, which is a linked one
+        JSONArray sampledFeatures = properties.getJSONArray("sampledFeature");
+        assertEquals(1, sampledFeatures.size());
+        JSONObject sampledFeature = sampledFeatures.getJSONObject(0);
+        assertEquals(
+                "http://www.opengis.net/def/nil/OGC/0/unknown", sampledFeature.getString("@href"));
+        assertEquals(
+                "http://www.geosciml.org/geosciml/2.0/doc/GeoSciML/GeologicUnit/GeologicUnit.html",
+                sampledFeature.getString("@role"));
+        assertEquals("unknown", sampledFeature.getString("@title"));
     }
 }

@@ -32,6 +32,7 @@ import org.geoserver.catalog.event.CatalogListener;
 import org.geoserver.catalog.util.CloseableIterator;
 import org.geoserver.catalog.util.CloseableIteratorAdapter;
 import org.geoserver.platform.GeoServerResourceLoader;
+import org.geotools.util.decorate.AbstractDecorator;
 import org.opengis.feature.type.Name;
 import org.opengis.filter.Filter;
 import org.opengis.filter.sort.SortBy;
@@ -188,18 +189,8 @@ public abstract class AbstractFilteredCatalog extends AbstractDecorator<Catalog>
         return filterResources(delegate.getFeatureTypesByNamespace(namespace));
     }
 
-    /** @deprecated */
-    public FeatureTypeInfo getFeatureTypeByStore(DataStoreInfo dataStore, String name) {
-        return checkAccess(delegate.getFeatureTypeByStore(dataStore, name));
-    }
-
     public FeatureTypeInfo getFeatureTypeByDataStore(DataStoreInfo dataStore, String name) {
         return checkAccess(delegate.getFeatureTypeByDataStore(dataStore, name));
-    }
-
-    /** @deprecated */
-    public List<FeatureTypeInfo> getFeatureTypesByStore(DataStoreInfo store) {
-        return filterResources(delegate.getFeatureTypesByStore(store));
     }
 
     public List<FeatureTypeInfo> getFeatureTypesByDataStore(DataStoreInfo store) {
@@ -424,31 +415,23 @@ public abstract class AbstractFilteredCatalog extends AbstractDecorator<Catalog>
     /**
      * Given a list of resources, returns a copy of it containing only the resources the user can
      * access
-     *
-     * @param resources
      */
     protected abstract <T extends ResourceInfo> List<T> filterResources(List<T> resources);
 
     /**
      * Given a list of stores, returns a copy of it containing only the resources the user can
      * access
-     *
-     * @param resources
      */
     protected abstract <T extends StoreInfo> List<T> filterStores(List<T> resources);
 
     /**
      * Given a list of layer groups, returns a copy of it containing only the groups the user can
      * access
-     *
-     * @param groups
      */
     protected abstract List<LayerGroupInfo> filterGroups(List<LayerGroupInfo> groups);
 
     /**
      * Given a list of layers, returns a copy of it containing only the layers the user can access
-     *
-     * @param layers
      */
     protected abstract List<LayerInfo> filterLayers(List<LayerInfo> layers);
 
@@ -460,16 +443,12 @@ public abstract class AbstractFilteredCatalog extends AbstractDecorator<Catalog>
     /**
      * Given a list of namespaces, returns a copy of it containing only the namespaces the user can
      * access
-     *
-     * @param namespaces
      */
     protected abstract <T extends NamespaceInfo> List<T> filterNamespaces(List<T> namespaces);
 
     /**
      * Given a list of workspaces, returns a copy of it containing only the workspaces the user can
      * access
-     *
-     * @param namespaces
      */
     protected abstract <T extends WorkspaceInfo> List<T> filterWorkspaces(List<T> workspaces);
 
@@ -782,8 +761,8 @@ public abstract class AbstractFilteredCatalog extends AbstractDecorator<Catalog>
 
         Filter securityFilter = securityFilter(of, filter);
 
-        CloseableIterator<T> filtered;
-        filtered = delegate.list(of, securityFilter, offset, count, sortBy);
+        @SuppressWarnings("PMD.CloseResource") // wrapped and returned
+        CloseableIterator<T> filtered = delegate.list(of, securityFilter, offset, count, sortBy);
 
         // create secured decorators on-demand
         final Function<T, T> securityWrapper = securityWrapper(of);

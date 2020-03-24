@@ -60,6 +60,8 @@ import org.geotools.geometry.jts.ReferencedEnvelope;
 import org.geotools.image.util.ImageUtilities;
 import org.geotools.styling.ChannelSelection;
 import org.geotools.styling.ColorMap;
+import org.geotools.styling.ColorMapEntry;
+import org.geotools.styling.ColorMapEntryImpl;
 import org.geotools.styling.ContrastEnhancement;
 import org.geotools.styling.FeatureTypeStyle;
 import org.geotools.styling.NamedLayer;
@@ -84,6 +86,7 @@ import org.opengis.feature.type.PropertyDescriptor;
 import org.opengis.filter.Filter;
 import org.opengis.filter.FilterFactory2;
 import org.opengis.filter.PropertyIsBetween;
+import org.opengis.filter.expression.Literal;
 import org.opengis.filter.spatial.BBOX;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.operation.TransformException;
@@ -167,6 +170,7 @@ public class ClassifierController extends BaseSLDServiceController {
                     boolean continuous,
             @RequestParam(value = "bbox", required = false) ReferencedEnvelope bbox,
             @RequestParam(value = "stddevs", required = false) Double stddevs,
+            @RequestParam(value = "env", required = false) String env,
             final HttpServletResponse response)
             throws Exception {
         LayerInfo layerInfo = catalog.getLayerByName(layerName);
@@ -192,7 +196,11 @@ public class ClassifierController extends BaseSLDServiceController {
                 this.getColorRamp(
                         customClasses, customColors, startColor, endColor, midColor, colors);
         final List<Rule> rules;
+        if (env != null) {
+            RestEnvVariableCallback.setOptions(env);
+        }
         try {
+
             ResourceInfo obj = layerInfo.getResource();
             /* Check if it's feature type or coverage */
             if (obj instanceof FeatureTypeInfo) {
@@ -243,6 +251,12 @@ public class ClassifierController extends BaseSLDServiceController {
             }
         } catch (IllegalArgumentException e) {
             throw new RestException(e.getMessage(), HttpStatus.BAD_REQUEST, e);
+        }
+
+        if (rules == null || rules.isEmpty()) {
+            throw new RestException(
+                    "Could not generate any rule, there is likely no data matching the request (layer is empty, of filtered down to no matching features/pixels)",
+                    HttpStatus.NOT_FOUND);
         }
 
         if (fullSLD) {
@@ -326,11 +340,7 @@ public class ClassifierController extends BaseSLDServiceController {
         private static final long serialVersionUID = -5538194136398411147L;
     }
 
-    /**
-     * @param layer
-     * @param rules
-     * @return
-     */
+    /** */
     private RulesList generateRulesList(String layer, List<Rule> rules) {
         final RulesList ruleList = new RulesList(layer);
         for (Rule rule : rules) {
@@ -422,8 +432,17 @@ public class ClassifierController extends BaseSLDServiceController {
         }
 
         // apply the color ramp
-        boolean skipFirstEntry = !"uniqueInterval".equals(method) && !open && !continuous;
+        boolean skipFirstEntry =
+                !"uniqueInterval".equals(method)
+                        && !open
+                        && !continuous
+                        && colorMap.getColorMapEntries().length > 1;
         builder.applyColorRamp(colorMap, ramp, skipFirstEntry, reverse);
+
+        // check for single valued colormaps
+        if (colorMap.getColorMapEntries().length == 1) {
+            adaptSingleValueColorMap(image, colorMap);
+        }
 
         // wrap the colormap into a raster symbolizer and rule
         RasterSymbolizer rasterSymbolizer = SF.createRasterSymbolizer();
@@ -442,12 +461,39 @@ public class ClassifierController extends BaseSLDServiceController {
         return Collections.singletonList(rule);
     }
 
-    /**
-     * Returns the selected band
-     *
-     * @param property
-     * @return
-     */
+    private void adaptSingleValueColorMap(RenderedImage image, ColorMap colorMap) {
+        // force it to be visible, depending on the method the first entry might be
+        // transparent
+        ColorMapEntry cm0 = colorMap.getColorMapEntry(0);
+        cm0.setOpacity(FF.literal(1));
+
+        // should always be a literal, just covering for possible future changes
+        if (cm0.getQuantity() instanceof Literal) {
+            // wrap it between two values that are slightly below and above
+            Float value = cm0.getQuantity().evaluate(null, Float.class);
+            if (Float.isInfinite(value)) {
+                // all must be the same color, switch to ramp mode
+                colorMap.setType(ColorMap.TYPE_RAMP);
+            } else {
+                int intBits = Float.floatToIntBits(value);
+                ColorMapEntry cm1 = new ColorMapEntryImpl();
+                cm1.setQuantity(FF.literal(Float.intBitsToFloat(intBits + 1)));
+                cm0.setQuantity(FF.literal(Float.intBitsToFloat(intBits - 1)));
+
+                cm1.setColor(cm0.getColor());
+                cm1.setLabel(cm0.getLabel());
+                cm1.setOpacity(cm0.getOpacity());
+
+                colorMap.addColorMapEntry(cm1);
+                colorMap.setType(ColorMap.TYPE_INTERVALS);
+            }
+        } else {
+            // make it formally valid, but the value match will not really not work
+            colorMap.setType(ColorMap.TYPE_VALUES);
+        }
+    }
+
+    /** Returns the selected band */
     private int getRequestedBand(String property) {
         // if no selection is provided, the code picks the first band
         if (property == null) {
@@ -463,11 +509,7 @@ public class ClassifierController extends BaseSLDServiceController {
         return selectedBand;
     }
 
-    /**
-     * Performs a full disposal of the coverage in question
-     *
-     * @param coverage
-     */
+    /** Performs a full disposal of the coverage in question */
     private void cleanImage(RenderedImage image) {
         if (image instanceof PlanarImage) {
             ImageUtilities.disposePlanarImageChain((PlanarImage) image);

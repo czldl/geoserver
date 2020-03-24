@@ -76,8 +76,6 @@ public class WicketTestApplication extends WebApplication {
      * will redirect to it).
      *
      * <p>The application will be hosted on path "/", port 8080
-     *
-     * @param factory
      */
     public static void start(IComponentFactory factory) {
         start(factory, "/", 8080);
@@ -86,10 +84,6 @@ public class WicketTestApplication extends WebApplication {
     /**
      * Same as {@link #start(IComponentFactory)}, but allows to specify the context path and the
      * port
-     *
-     * @param factory
-     * @param contextPath
-     * @param port
      */
     public static void start(IComponentFactory factory, String contextPath, int port) {
         // sanity check and install the factory
@@ -104,7 +98,6 @@ public class WicketTestApplication extends WebApplication {
 
         // Set some timeout options to make debugging easier.
         connector.setIdleTimeout(1000 * 60 * 60);
-        connector.setSoLingerTime(-1);
         connector.setPort(port);
         server.setConnectors(new Connector[] {connector});
 

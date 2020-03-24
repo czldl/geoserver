@@ -22,7 +22,9 @@ public class GeoIPPostProcessor implements RequestPostProcessor {
     static Logger LOGGER = Logging.getLogger("org.geoserver.montior");
 
     /** cached geoip lookup service */
-    static LookupService geoIPLookup;
+    static volatile LookupService geoIPLookup;
+
+    static final String PROCESSOR_NAME = "geoIp";
 
     // TODO: cache by IP address
 
@@ -88,5 +90,10 @@ public class GeoIPPostProcessor implements RequestPostProcessor {
             LOGGER.log(Level.WARNING, "Error occured looking up GeoIP database", e);
             return null;
         }
+    }
+
+    @Override
+    public String getName() {
+        return PROCESSOR_NAME;
     }
 }

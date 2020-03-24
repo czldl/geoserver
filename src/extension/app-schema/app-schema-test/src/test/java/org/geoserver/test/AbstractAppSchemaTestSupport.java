@@ -6,9 +6,12 @@
 
 package org.geoserver.test;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -22,12 +25,17 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.TimeZone;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import net.sf.json.JSON;
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
 import org.custommonkey.xmlunit.SimpleNamespaceContext;
 import org.custommonkey.xmlunit.XMLAssert;
 import org.custommonkey.xmlunit.XMLUnit;
@@ -139,6 +147,7 @@ public abstract class AbstractAppSchemaTestSupport extends GeoServerSystemTestSu
         getGeoServer().save(wfs);
         // disable schema caching in tests, as schemas are expected to provided on the classpath
         SchemaCache.disableAutomaticConfiguration();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
     }
 
     /**
@@ -487,37 +496,8 @@ public abstract class AbstractAppSchemaTestSupport extends GeoServerSystemTestSu
      * @param bgColor the background color for which differing pixels are looked for
      */
     protected void assertNotBlank(String testName, BufferedImage image, Color bgColor) {
-        int pixelsDiffer = countNonBlankPixels(testName, image, bgColor);
+        int pixelsDiffer = super.countNonBlankPixels(testName, image, bgColor);
         assertTrue(testName + " image is completely blank", 0 < pixelsDiffer);
-    }
-
-    /**
-     * For WMS tests.
-     *
-     * <p>Counts the number of non black pixels
-     *
-     * @param testName
-     * @param image
-     * @param bgColor
-     */
-    protected int countNonBlankPixels(String testName, BufferedImage image, Color bgColor) {
-        int pixelsDiffer = 0;
-
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                if (image.getRGB(x, y) != bgColor.getRGB()) {
-                    ++pixelsDiffer;
-                }
-            }
-        }
-
-        LOGGER.fine(
-                testName
-                        + ": pixel count="
-                        + (image.getWidth() * image.getHeight())
-                        + " non bg pixels: "
-                        + pixelsDiffer);
-        return pixelsDiffer;
     }
 
     /**
@@ -608,13 +588,12 @@ public abstract class AbstractAppSchemaTestSupport extends GeoServerSystemTestSu
     }
 
     /**
-     * Returns xml String from Document Object
+     * Utility method that converts a XML document object to a string.
      *
-     * @param document
-     * @return
-     * @throws TransformerException
+     * @param document Xml Document to parse
+     * @return String representation of xml document
      */
-    protected String toString(Document document) throws TransformerException {
+    protected static String toString(Document document) throws TransformerException {
         TransformerFactory tf = TransformerFactory.newInstance();
         Transformer transformer = tf.newTransformer();
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
@@ -636,5 +615,36 @@ public abstract class AbstractAppSchemaTestSupport extends GeoServerSystemTestSu
         } catch (Exception exception) {
             throw new RuntimeException(String.format("Error reading resource '%s'.", resourcePath));
         }
+    }
+
+    /** Drills into nested JSON objects (won't traverse arrays though) */
+    protected JSONObject getNestedObject(JSONObject root, String... keys) {
+        JSONObject curr = root;
+        for (String key : keys) {
+            if (!curr.has(key)) {
+                fail("Could not find property " + key + " in " + curr);
+            }
+            curr = curr.getJSONObject(key);
+        }
+        return curr;
+    }
+
+    /**
+     * Helper method that just extracts \ looks for a station in the provided GeoJSON response based
+     * on its ID.
+     */
+    protected JSONObject getFeaturePropertiesById(JSON geoJson, String id) {
+        assertThat(geoJson, instanceOf(JSONObject.class));
+        JSONObject json = (JSONObject) geoJson;
+        JSONArray features = json.getJSONArray("features");
+        for (int i = 0; i < features.size(); i++) {
+            JSONObject feature = features.getJSONObject(i);
+            if (Objects.equals(id, feature.get("id"))) {
+                // we found the feature we are looking for
+                return feature.getJSONObject("properties");
+            }
+        }
+        // feature matching the provided ID not found
+        return null;
     }
 }

@@ -34,12 +34,15 @@ import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.StringResourceModel;
 import org.apache.wicket.request.cycle.RequestCycle;
+import org.apache.wicket.request.mapper.parameter.INamedParameters.Type;
+import org.apache.wicket.request.mapper.parameter.PageParameters;
 import org.apache.wicket.request.resource.PackageResourceReference;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.config.GeoServer;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.security.GeoServerSecurityProvider;
 import org.geoserver.web.spring.security.GeoServerSession;
+import org.geoserver.web.wicket.GeoServerTablePanel;
 import org.geoserver.web.wicket.ParamResourceModel;
 import org.geotools.util.logging.Logging;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -341,8 +344,21 @@ public class GeoServerBasePage extends WebPage implements IAjaxIndicatorAware {
                                     public void populateItem(ListItem<MenuPageInfo> item) {
                                         MenuPageInfo info = item.getModelObject();
                                         BookmarkablePageLink<Page> link =
-                                                new BookmarkablePageLink<>(
-                                                        "link", info.getComponentClass());
+                                                new BookmarkablePageLink<Page>(
+                                                        "link", info.getComponentClass()) {
+
+                                                    @Override
+                                                    public PageParameters getPageParameters() {
+                                                        PageParameters pageParams =
+                                                                super.getPageParameters();
+                                                        pageParams.add(
+                                                                GeoServerTablePanel.FILTER_PARAM,
+                                                                false,
+                                                                Type.PATH);
+                                                        return pageParams;
+                                                    }
+                                                };
+
                                         link.add(
                                                 AttributeModifier.replace(
                                                         "title",
@@ -559,11 +575,7 @@ public class GeoServerBasePage extends WebPage implements IAjaxIndicatorAware {
         return getGeoServerApplication().getCatalog();
     }
 
-    /**
-     * Splits up the pages by category, turning the list into a map keyed by category
-     *
-     * @param pages
-     */
+    /** Splits up the pages by category, turning the list into a map keyed by category */
     private Map<Category, List<MenuPageInfo>> splitByCategory(List<MenuPageInfo> pages) {
         Collections.sort(pages);
         HashMap<Category, List<MenuPageInfo>> map = new HashMap<Category, List<MenuPageInfo>>();
@@ -604,16 +616,6 @@ public class GeoServerBasePage extends WebPage implements IAjaxIndicatorAware {
      */
     public String getAjaxIndicatorMarkupId() {
         return "ajaxFeedback";
-    }
-
-    /**
-     * Returns the top feedback panel included in the GeoServer base page
-     *
-     * @deprecated Use {@link #addFeedbackPanels(AjaxRequestTarget)} instead
-     */
-    @Deprecated
-    public FeedbackPanel getFeedbackPanel() {
-        return topFeedbackPanel;
     }
 
     /**

@@ -11,7 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import org.easymock.classextension.EasyMock;
+import org.easymock.EasyMock;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.LayerGroupInfo;
 import org.geoserver.catalog.MetadataMap;
@@ -162,6 +162,7 @@ public class CatalogConfigurationLayerConformanceTest extends LayerConfiguration
                 new XMLConfiguration(
                         context.getContextProvider(), (ConfigurationResourceProvider) null);
         TileLayerCatalog tlCatalog = new DefaultTileLayerCatalog(resourceLoader, xmlConfig);
+        tlCatalog.initialize();
 
         return new CatalogConfiguration(catalog, tlCatalog, gsBroker);
     }
@@ -179,7 +180,7 @@ public class CatalogConfigurationLayerConformanceTest extends LayerConfiguration
                 new XMLConfiguration(
                         context.getContextProvider(), (ConfigurationResourceProvider) null);
         TileLayerCatalog tlCatalog = new DefaultTileLayerCatalog(resourceLoader, xmlConfig);
-
+        tlCatalog.initialize();
         return new CatalogConfiguration(catalog, tlCatalog, gsBroker);
     }
 

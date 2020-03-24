@@ -13,7 +13,7 @@
  <groupId>org.geoserver</groupId>
  <artifactId>geoserver</artifactId>
  <packaging>pom</packaging>
- <version>2.16-SNAPSHOT</version>
+ <version>2.18-SNAPSHOT</version>
  <name>GeoServer</name>
 
  <scm>
@@ -69,14 +69,14 @@
   <repository>
     <id>osgeo</id>
     <name>Open Source Geospatial Foundation Repository</name>
-    <url>http://download.osgeo.org/webdav/geotools/</url>
+    <url>https://download.osgeo.org/webdav/geotools/</url>
     <!-- release repository used by geotools (and third-party dependencies) -->
   </repository>
    
    <repository>
       <id>geosolutions</id>
       <name>geosolutions repository</name>
-      <url>http://maven.geo-solutions.it/</url>
+      <url>https://maven.geo-solutions.it/</url>
       <snapshots>
         <enabled>true</enabled>
       </snapshots>
@@ -381,6 +381,11 @@
    </dependency>
    <dependency>
     <groupId>org.geotools</groupId>
+    <artifactId>gt-wmts</artifactId>
+    <version>${gt.version}</version>
+   </dependency>
+   <dependency>
+    <groupId>org.geotools</groupId>
     <artifactId>gt-postgis-versioned</artifactId>
     <version>${gt.version}</version>
    </dependency>
@@ -612,6 +617,12 @@
     <scope>test</scope>
    </dependency>
    <dependency>
+     <groupId>org.awaitility</groupId>
+     <artifactId>awaitility</artifactId>
+     <version>4.0.1</version>
+     <scope>test</scope>
+   </dependency>
+   <dependency>
     <groupId>org.hamcrest</groupId>
     <artifactId>hamcrest-library</artifactId>
     <version>1.3</version>
@@ -635,11 +646,6 @@
     <groupId>org.easymock</groupId>
     <artifactId>easymock</artifactId>
     <version>3.6</version>
-   </dependency>
-   <dependency>
-    <groupId>org.easymock</groupId>
-    <artifactId>easymockclassextension</artifactId>
-    <version>3.2</version>
    </dependency>
    <dependency>
     <groupId>cglib</groupId>
@@ -781,7 +787,7 @@
    <dependency>
     <groupId>com.jayway.jsonpath</groupId>
     <artifactId>json-path</artifactId>
-    <version>2.2.0</version>
+    <version>2.4.0</version>
    </dependency>
    <dependency>
     <groupId>org.apache.httpcomponents</groupId>
@@ -791,12 +797,12 @@
    <dependency>
     <groupId>org.apache.httpcomponents</groupId>
     <artifactId>httpclient</artifactId>
-    <version>4.5.5</version>
+    <version>4.5.11</version>
    </dependency>
    <dependency>
     <groupId>org.apache.httpcomponents</groupId>
     <artifactId>httpclient-cache</artifactId>
-    <version>4.5.5</version>
+    <version>4.5.11</version>
    </dependency>
    <dependency>
     <groupId>org.springframework</groupId>
@@ -866,8 +872,9 @@
    <dependency>
     <groupId>org.springframework.ldap</groupId>
     <artifactId>spring-ldap-test</artifactId>
-    <version>1.3.2.RELEASE</version>
+    <version>2.3.2.RELEASE</version>
    </dependency>
+
 <!--
    <dependency>
     <groupId>org.springframework.security</groupId>
@@ -1072,9 +1079,8 @@
    </dependency>
    <dependency> 
      <groupId>net.sf.json-lib</groupId> 
-     <artifactId>json-lib</artifactId> 
-     <classifier>jdk15</classifier>
-     <version>2.4</version>
+     <artifactId>json-lib</artifactId>
+     <version>2.4.2-geoserver</version>
    </dependency>
    <dependency>
      <groupId>org.codehaus.jackson</groupId>
@@ -1162,7 +1168,7 @@
     <dependency>
       <groupId>com.thoughtworks.xstream</groupId>
       <artifactId>xstream</artifactId>
-      <version>1.4.10</version>
+      <version>1.4.11.1</version>
     </dependency>
     <dependency>
       <groupId>com.h2database</groupId>
@@ -1259,7 +1265,7 @@
     <dependency>
       <groupId>no.ecc.vectortile</groupId>
       <artifactId>java-vector-tile</artifactId>
-      <version>1.3.4</version>
+      <version>1.3.7</version>
     </dependency>
     <dependency>
       <groupId>com.ning</groupId>
@@ -1291,7 +1297,7 @@
     <dependency>
      <groupId>com.github.oshi</groupId>
      <artifactId>oshi-core</artifactId>
-     <version>3.4.3</version>
+     <version>3.13.3</version>
     </dependency>
     <dependency>
       <groupId>org.postgresql</groupId>
@@ -1323,7 +1329,7 @@
   <dependency>
     <groupId>org.apache.directory.server</groupId>
     <artifactId>apacheds-all</artifactId>
-    <version>1.5.7</version>
+    <version>2.0.0-M24</version>
   </dependency>
   <dependency>
     <groupId>javax.xml.bind</groupId>
@@ -1502,7 +1508,7 @@
    <!-- unit testing -->
    <plugin>
     <artifactId>maven-surefire-plugin</artifactId>
-    <version>2.12.3</version>
+    <version>2.22.2</version>
     <configuration>
      <runOrder>alphabetical</runOrder>
      <source>1.8</source>
@@ -1518,14 +1524,14 @@
      <printSummary>true</printSummary>
      <testFailureIgnore>${allow.test.failure.ignore}</testFailureIgnore>
      <excludedGroups>${test.excludedGroups}</excludedGroups>
-     <argLine>${argLine} -XX:+IgnoreUnrecognizedVMOptions --illegal-access=debug</argLine>
+     <argLine>@{argLine} -XX:+IgnoreUnrecognizedVMOptions --illegal-access=debug -Dfile.encoding=UTF-8</argLine>
     </configuration>
    </plugin>
 
    <!-- artifact assembly -->
    <plugin>
     <artifactId>maven-assembly-plugin</artifactId>
-    <version>2.1</version>
+    <version>3.2.0</version>
     <configuration>
      <descriptors>
       <descriptor>release/war.xml</descriptor>
@@ -1537,7 +1543,6 @@
       <descriptor>release/ext-jp2k.xml</descriptor>
       <descriptor>release/ext-mysql.xml</descriptor>
       <descriptor>release/ext-oracle.xml</descriptor>
-      <descriptor>release/ext-arcsde.xml</descriptor>
       <descriptor>release/ext-pyramid.xml</descriptor>
       <descriptor>release/ext-gdal.xml</descriptor>
       <descriptor>release/ext-h2.xml</descriptor>
@@ -1571,11 +1576,14 @@
       <descriptor>release/ext-netcdf-out.xml</descriptor>
       <descriptor>release/ext-vectortiles.xml</descriptor>
       <descriptor>release/ext-ysld.xml</descriptor>
+      <descriptor>release/ext-mbstyle.xml</descriptor>
       <descriptor>release/ext-sldservice.xml</descriptor>
       <descriptor>release/ext-geofence.xml</descriptor>
       <descriptor>release/ext-geofence-server.xml</descriptor>
+      <descriptor>release/ext-authkey.xml</descriptor>
+      <descriptor>release/ext-web-resource.xml</descriptor>
      </descriptors>
-     <finalName>geoserver-2.16-SNAPSHOT</finalName>
+     <finalName>geoserver-${project.version}</finalName>
      <outputDirectory>${project.build.directory}/release</outputDirectory>
     </configuration>
    </plugin>
@@ -1947,26 +1955,27 @@
   <module>restconfig-wcs</module>
   <module>restconfig-wfs</module>
   <module>restconfig-wms</module>
+  <module>restconfig-wmts</module>
   <module>web</module>
   <module>community</module>
   <module>extension</module>
  </modules>
 
  <properties>
-  <gs.version>2.16-SNAPSHOT</gs.version>
-  <gt.version>22-SNAPSHOT</gt.version>
-  <gwc.version>1.16-SNAPSHOT</gwc.version>
+  <gs.version>2.18-SNAPSHOT</gs.version>
+  <gt.version>24-SNAPSHOT</gt.version>
+  <gwc.version>1.18-SNAPSHOT</gwc.version>
   <jts.version>1.16.1</jts.version>
-  <spring.version>5.1.1.RELEASE</spring.version>
-  <spring.security.version>5.1.1.RELEASE</spring.security.version>
+  <spring.version>5.1.13.RELEASE</spring.version>
+  <spring.security.version>5.1.8.RELEASE</spring.security.version>
   <servlet-api.version>3.0.1</servlet-api.version>
-  <jetty.version>9.4.12.v20180830</jetty.version>
+  <jetty.version>9.4.18.v20190429</jetty.version>
   <jetty.servlet-api.version>3.1.0</jetty.servlet-api.version>
   <poi.version>4.0.0</poi.version>
   <wicket.version>7.6.0</wicket.version>
   <ant.version>1.8.4</ant.version>
-  <imageio-ext.version>1.3.0</imageio-ext.version>
-  <jaiext.version>1.1.7</jaiext.version>
+  <imageio-ext.version>1.3.2</imageio-ext.version>
+  <jaiext.version>1.1.12</jaiext.version>
   <java.awt.headless>true</java.awt.headless>
   <sun.java2d.d3d>true</sun.java2d.d3d>
   <jvm.opts></jvm.opts>
@@ -1998,7 +2007,7 @@
   <git.commit.useNative>false</git.commit.useNative>
   <git.commit.runOnlyOnce>true</git.commit.runOnlyOnce>
   <jackson1.version>1.9.13</jackson1.version>
-  <jackson2.version>2.9.7</jackson2.version>
+  <jackson2.version>2.10.1</jackson2.version>
   <compress-lzf.version>1.0.3</compress-lzf.version>
   <marlin.version>0.9.3</marlin.version>
   <postgresql.jdbc.version>42.2.5</postgresql.jdbc.version>
@@ -2010,11 +2019,12 @@
   <fmt.action>format</fmt.action>
   <fmt.skip>false</fmt.skip>
   <errorProneFlags></errorProneFlags>
-  <errorProne.version>2.3.2</errorProne.version>
+  <errorProne.version>2.3.4</errorProne.version>
   <javac.version>9+181-r4173-1</javac.version>
-  <pmd.version>6.11.0</pmd.version>
+  <pmd.version>6.20.0</pmd.version>
   <checkstyle.skip>false</checkstyle.skip>
   <qa>false</qa>
+  <lint>deprecation</lint>
  </properties>
 
  <profiles>
@@ -2192,6 +2202,7 @@
           <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
+            <version>${jacoco.version}</version>
             <executions>
               <execution>
                 <id>pre-unit-test</id>
@@ -2316,6 +2327,10 @@
               <compilerArgs>
                 <arg>-XDcompilePolicy=simple</arg>
                 <arg>-Xplugin:ErrorProne -XepExcludedPaths:${project.build.directory}/generated-sources/.* ${errorProneFlags}</arg>
+                <arg>-Xlint:${lint}</arg>
+                <arg>-Werror</arg>
+                <arg>-Xmaxwarns</arg>
+                <arg>1000</arg>
               </compilerArgs>
               <annotationProcessorPaths>
                 <path>
@@ -2351,12 +2366,16 @@
                 <arg>-XDcompilePolicy=simple</arg>
                 <arg>-Xplugin:ErrorProne -XepExcludedPaths:${project.build.directory}/generated-sources/.* ${errorProneFlags}</arg>
                 <arg>-J-Xbootclasspath/p:${settings.localRepository}/com/google/errorprone/javac/${javac.version}/javac-${javac.version}.jar</arg>
+                <arg>-Xlint:${lint}</arg>
+                <arg>-Werror</arg>
+                <arg>-Xmaxwarns</arg>
+                <arg>1000</arg>
               </compilerArgs>
               <annotationProcessorPaths>
                 <path>
                   <groupId>com.google.errorprone</groupId>
                   <artifactId>error_prone_core</artifactId>
-                  <version>2.3.2</version>
+                  <version>${errorProne.version}</version>
                 </path>
               </annotationProcessorPaths>
             </configuration>
@@ -2380,9 +2399,9 @@
             <version>3.1.10</version>
             <configuration>
               <effort>More</effort>
-              <threshold>High</threshold>
+              <!--threshold>High</threshold-->
               <xmlOutput>true</xmlOutput>
-              <maxRank>10</maxRank>
+              <maxRank>15</maxRank>
               <excludeFilterFile>${geoserverBaseDir}/../build/qa/spotbugs-exclude.xml</excludeFilterFile>
               <jvmArgs>-XX:+TieredCompilation -XX:TieredStopAtLevel=1</jvmArgs>
             </configuration>
@@ -2410,7 +2429,7 @@
            <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-checkstyle-plugin</artifactId>
-              <version>3.0.0</version>
+              <version>3.1.1</version>
               <configuration>
                     <logViolationsToConsole>true</logViolationsToConsole>
                     <!-- ignore generated classes, e.g., javacc ones -->

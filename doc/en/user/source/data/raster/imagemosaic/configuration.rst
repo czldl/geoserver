@@ -239,6 +239,9 @@ In addition to the required envelope and location attributes, the schema for the
    * - Name
      - N
      - The name to be assigned to the index. If unspecified, the index name will usually match the name of the folder containing the mosaic.
+   * - NoData
+     - N
+     - Specifies the NoData for the mosaic. (This might be useful, as an instance, when imposing the Envelope2D. At time of ImageMosaic's initialization, a small 5x5 pixels sample read is performed by ImageMosaic on the Envelope's corner in order to retrieve granule's metadata and properties, as nodata. If Envelope2D is forced in configuration, there might be the case that this sample read will not involve any actual granule so a default noData will be set which may be different with respect to what is actually stored on granules. Specifying the desired NoData property in indexer will solve this type of issue).
    * - CoverageNameCollectorSPI
      - N
      - As described in the previous row, the Name parameter allows specification of the coverage name to be exposed by the ImageMosaic. An ImageMosaic of NetCDFs instead exposes a coverage for each supported variable found in the NetCDF, using the variable's name as the coverage name (for instance, air_temperature, wind_speed, etc.) The optional CoverageNameCollectorSPI property allows specification of a CoverageNameCollector plugin to be used to instruct the ImageMosaic on how to setup different coverageNames for granules. It should contains the full name of the implementing class plus an optional set of semicolon-separated keyValue pairs prefixed by ":". See below for an example.
@@ -251,6 +254,9 @@ In addition to the required envelope and location attributes, the schema for the
    * - Wildcard
      - N
      - Wildcard used to specify which files should be scanned by the indexer. (For instance: ".")
+   * - WrapStore
+     - N
+     - By default, Postgresql identifiers can't be longer than 63 chars. Longer names will be truncated to that fixed length. When dealing with multidimensional datasets (for instance: NetCDFs, GRIBs) each variable (NetCDF) or parameter (GRIB) is indexed into a table with the same name. Therefore an atmosphere-absorption-optical-thickness-due-to-particulate-organic-matter-ambient-aerosol-particles NetCDF CF variable will be associated to a table with the same name. Postgresql will truncate that to atmosphere-absorption-optical-thickness-due-to-particulate-orga breaking the one-to-one mapping and therefore breaking the proper functioning. Setting the WrapStore flag to ``true`` will establish a hidden mapping between full long names and truncated table names to support proper working.
    * - MosaicCRS
      - N
      - The "native" CRS of the mosaic, that is, the one in which footprints are collected. Useful when dealing with granules in multiple CRSs (see tutorial)
@@ -325,6 +331,28 @@ In case of custom format datetimes in filename, an additional *format* element s
 | In that case, the timeregex.properties file should be like this:
 
     regex=.*([0-9]{10}).*,format=yyyyMMddHH
+
+In case of reduced precision of temporal information, where there is the need to get the higher time included in that reduced value, an additional *,useHighTime=true* element should be added.
+
+| Example:
+| Temperature_2017111319.tif
+| an hourly Temperature file with datetime = November, 13 2017 at 19h 00m 00s 000ms
+| You want to get the max time included in that reduced precision, which is November, 13 2017 at 19h 59m 59s 999ms 
+|
+| In that case, the timeregex.properties file should be like this:
+
+    regex=.*([0-9]{10}).*,format=yyyyMMddHH,useHighTime=true
+
+In case the temporal information is spread along the whole file path, an additional *,fullPath=true* element should be added.
+
+| Example:
+| /data/20120202/Temperature.T1800.tif
+| an hourly Temperature tif file with Year,Month and Day specified in the parent folder (20120202) and time value embeeded in the name (Temperature.T1800.tif)
+|
+| In that case, the timeregex.properties file should be like this:
+
+    regex=(?:\/)(\\d{8})(?:\/)(?:Temperature.)(T\\d{4})(?:.tif),fullPath=true
+
 
 
 :file:`elevationregex.properties`::

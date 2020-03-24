@@ -53,6 +53,7 @@ import org.geoserver.catalog.LayerGroupInfo.Mode;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.MetadataMap;
 import org.geoserver.catalog.NamespaceInfo;
+import org.geoserver.catalog.SLDHandler;
 import org.geoserver.catalog.StyleInfo;
 import org.geoserver.catalog.WMSLayerInfo;
 import org.geoserver.catalog.WMSStoreInfo;
@@ -113,10 +114,10 @@ public class XStreamPersisterTest {
         GeoServerInfo g1 = factory.createGlobal();
         g1.setAdminPassword("foo");
         g1.setAdminUsername("bar");
-        g1.setCharset("ISO-8859-1");
+        g1.getSettings().setCharset("ISO-8859-1");
 
         ContactInfo contact = factory.createContact();
-        g1.setContact(contact);
+        g1.getSettings().setContact(contact);
         contact.setAddress("123");
         contact.setAddressCity("Victoria");
         contact.setAddressCountry("Canada");
@@ -130,17 +131,17 @@ public class XStreamPersisterTest {
         contact.setContactPosition("hacker");
         contact.setContactVoice("+1 250 765 4321");
 
-        g1.setNumDecimals(2);
-        g1.setOnlineResource("http://acme.org");
-        g1.setProxyBaseUrl("http://proxy.acme.org");
-        g1.setSchemaBaseUrl("http://schemas.acme.org");
+        g1.getSettings().setNumDecimals(2);
+        g1.getSettings().setOnlineResource("http://acme.org");
+        g1.getSettings().setProxyBaseUrl("http://proxy.acme.org");
+        g1.getSettings().setSchemaBaseUrl("http://schemas.acme.org");
 
-        g1.setTitle("Acme's GeoServer");
+        g1.getSettings().setTitle("Acme's GeoServer");
         g1.setUpdateSequence(123);
-        g1.setVerbose(true);
-        g1.setVerboseExceptions(true);
+        g1.getSettings().setVerbose(true);
+        g1.getSettings().setVerboseExceptions(true);
         g1.getMetadata().put("one", Integer.valueOf(1));
-        g1.getMetadata().put("two", new Double(2.2));
+        g1.getMetadata().put("two", Double.valueOf(2.2));
 
         ByteArrayOutputStream out = out();
 
@@ -175,7 +176,7 @@ public class XStreamPersisterTest {
     public void testGobalContactDefault() throws Exception {
         GeoServerInfo g1 = factory.createGlobal();
         ContactInfo contact = factory.createContact();
-        g1.setContact(contact);
+        g1.getSettings().setContact(contact);
 
         ByteArrayOutputStream out = out();
         persister.save(g1, out);
@@ -520,6 +521,21 @@ public class XStreamPersisterTest {
 
         catalog.add(s2);
         assertNull(s2.getWorkspace());
+    }
+
+    @Test
+    public void testLegacyStyle() throws Exception {
+        String xml =
+                "<style>\n"
+                        + "  <id>StyleInfoImpl--570ae188:124761b8d78:-7fe2</id>\n"
+                        + "  <name>raster</name>\n"
+                        + "  <filename>raster.sld</filename>\n"
+                        + "</style>";
+
+        StyleInfo style =
+                persister.load(new ByteArrayInputStream(xml.getBytes("UTF-8")), StyleInfo.class);
+        assertEquals(SLDHandler.FORMAT, style.getFormat());
+        assertEquals(SLDHandler.VERSION_10, style.getFormatVersion());
     }
 
     @Test
@@ -1191,7 +1207,7 @@ public class XStreamPersisterTest {
         metadataLink.setAbout("about");
         coverage.getMetadataLinks().add(metadataLink);
         CoverageDimensionImpl coverageDimension = new CoverageDimensionImpl("time");
-        coverageDimension.setNullValues(Collections.singletonList(new Double(0)));
+        coverageDimension.setNullValues(Collections.singletonList(Double.valueOf(0)));
         coverage.getDimensions().add(coverageDimension);
         coverage.getInterpolationMethods().add("Bilinear");
         coverage.getParameters().put("ParameterKey", "ParameterValue");
@@ -1293,8 +1309,6 @@ public class XStreamPersisterTest {
     /**
      * Test for GEOS-7444. Check GridGeometry is correctly unmarshaled when XML elements are
      * provided on an different order than the marshaling one
-     *
-     * @throws Exception
      */
     @Test
     public void testGridGeometry2DConverterUnmarshalling() throws Exception {
@@ -1471,6 +1485,69 @@ public class XStreamPersisterTest {
         assertThat(metadata, hasEntry("key1", "value1"));
         assertThat(metadata, hasEntry("key2", "value2"));
         assertThat(metadata, hasEntry("netcdf", null));
+    }
+
+    @Test
+    public void testLegacyWMSLayerInfo() throws Exception {
+        // this test asserts that when expecting a legacy wmsLayer xml tag
+        // the converter kicks and sets the default values to ensure integrity
+        // and avoid mannually re-saving the layer from GUI
+        String xml =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        + "<wmsLayer>\n"
+                        + "   <id>WMSLayerInfoImpl-622caab0:16ff63f5f7a:-7ffc</id>\n"
+                        + "   <name>states</name>\n"
+                        + "   <nativeName>topp:states</nativeName>\n"
+                        + "   <namespace>\n"
+                        + "      <id>NamespaceInfoImpl--570ae188:124761b8d78:-7ffc</id>\n"
+                        + "   </namespace>\n"
+                        + "   <title>USA Population</title>\n"
+                        + "   <description>This is some census data on the states.</description>\n"
+                        + "   <abstract>This is some census data on the states.</abstract>\n"
+                        + "   <keywords>\n"
+                        + "      <string>census</string>\n"
+                        + "      <string>united</string>\n"
+                        + "      <string>boundaries</string>\n"
+                        + "      <string>state</string>\n"
+                        + "      <string>states</string>\n"
+                        + "   </keywords>\n"
+                        + "   <nativeCRS>GEOGCS[\"WGS 84\", &#xD;\n"
+                        + "  DATUM[\"World Geodetic System 1984\", &#xD;\n"
+                        + "    SPHEROID[\"WGS 84\", 6378137.0, 298.257223563, AUTHORITY[\"EPSG\",\"7030\"]], &#xD;\n"
+                        + "    AUTHORITY[\"EPSG\",\"6326\"]], &#xD;\n"
+                        + "  PRIMEM[\"Greenwich\", 0.0, AUTHORITY[\"EPSG\",\"8901\"]], &#xD;\n"
+                        + "  UNIT[\"degree\", 0.017453292519943295], &#xD;\n"
+                        + "  AXIS[\"Geodetic longitude\", EAST], &#xD;\n"
+                        + "  AXIS[\"Geodetic latitude\", NORTH], &#xD;\n"
+                        + "  AUTHORITY[\"EPSG\",\"4326\"]]</nativeCRS>\n"
+                        + "   <srs>EPSG:4326</srs>\n"
+                        + "   <nativeBoundingBox>\n"
+                        + "      <minx>-124.73142200000001</minx>\n"
+                        + "      <maxx>-66.969849</maxx>\n"
+                        + "      <miny>24.955967</miny>\n"
+                        + "      <maxy>49.371735</maxy>\n"
+                        + "      <crs>EPSG:4326</crs>\n"
+                        + "   </nativeBoundingBox>\n"
+                        + "   <latLonBoundingBox>\n"
+                        + "      <minx>-124.731422</minx>\n"
+                        + "      <maxx>-66.969849</maxx>\n"
+                        + "      <miny>24.955967</miny>\n"
+                        + "      <maxy>49.371735</maxy>\n"
+                        + "      <crs>EPSG:4326</crs>\n"
+                        + "   </latLonBoundingBox>\n"
+                        + "   <projectionPolicy>FORCE_DECLARED</projectionPolicy>\n"
+                        + "   <enabled>true</enabled>\n"
+                        + "   <store class=\"wmsStore\">\n"
+                        + "      <id>WMSStoreInfoImpl-622caab0:16ff63f5f7a:-7fff</id>\n"
+                        + "   </store>\n"
+                        + "   <serviceConfiguration>false</serviceConfiguration>\n"
+                        + "</wmsLayer>";
+
+        WMSLayerInfo wmsLayerInfo =
+                persister.load(new ByteArrayInputStream(xml.getBytes()), WMSLayerInfo.class);
+
+        assertTrue(wmsLayerInfo.getPreferredFormat().equalsIgnoreCase("image/png"));
+        assertTrue(wmsLayerInfo.getForcedRemoteStyle().isEmpty());
     }
 
     ByteArrayOutputStream out() {

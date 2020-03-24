@@ -91,6 +91,7 @@
     
     <bean id="wmsGetFeatureInfoHTML" class="org.geoserver.wms.featureinfo.HTMLFeatureInfoOutputFormat">
       <constructor-arg ref="wms" />
+      <constructor-arg ref="resourceLoader"/>
     </bean>
 
 	<!-- GetFeatureInfo JSONP -->
@@ -432,6 +433,7 @@
 	</bean>
     <bean id="wmsJPEGLegendGraphicResponse" 
         class="org.geoserver.wms.legendgraphic.JPEGLegendGraphicResponse">
+        <constructor-arg index="0" ref="wms"/>
     </bean>
 	<bean id="wmsPNGLegendOutputFormat" 
 		class="org.geoserver.wms.legendgraphic.PNGLegendOutputFormat">
@@ -840,6 +842,6 @@
     <constructor-arg ref="wms"/>
   </bean>
   
-  <bean id="wmsNearestMatchWarningAppender" class="org.geoserver.wms.NearestMatchWarningAppender"/>
-  
+  <bean id="clipWMSGetMapCallBack" class="org.geoserver.wms.clip.ClipWMSGetMapCallBack"/>
+
 </beans>

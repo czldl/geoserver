@@ -42,9 +42,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.servlet.HandlerMapping;
 
 /** Controller for managing GeoServer Layers. */
 @RestController
@@ -93,7 +90,6 @@ public class LayerController extends AbstractCatalogController {
     /**
      * A single layer as JSON, XML or HTML.
      *
-     * @param layerName
      * @return A single layer
      */
     @GetMapping(
@@ -194,13 +190,7 @@ public class LayerController extends AbstractCatalogController {
                     @Override
                     protected CatalogInfo getCatalogObject() {
                         @SuppressWarnings("unchecked")
-                        Map<String, String> uriTemplateVars =
-                                (Map<String, String>)
-                                        RequestContextHolder.getRequestAttributes()
-                                                .getAttribute(
-                                                        HandlerMapping
-                                                                .URI_TEMPLATE_VARIABLES_ATTRIBUTE,
-                                                        RequestAttributes.SCOPE_REQUEST);
+                        Map<String, String> uriTemplateVars = getURITemplateVariables();
                         String layerName = uriTemplateVars.get("layerName");
                         if (layerName == null) {
                             return null;

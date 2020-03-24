@@ -8,12 +8,12 @@ package org.vfny.geoserver.wms.responses.map.htmlimagemap;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 import org.geoserver.wms.WMSMapContent;
 import org.geoserver.wms.WebMap;
 import org.geotools.data.DataUtilities;
-import org.geotools.data.DefaultQuery;
 import org.geotools.data.Query;
 import org.geotools.data.crs.ReprojectFeatureResults;
 import org.geotools.data.simple.SimpleFeatureCollection;
@@ -90,9 +90,6 @@ public class EncodeHTMLImageMap extends WebMap {
     /**
      * Applies Filters from style rules to the given query, to optimize DataStore queries. Similar
      * to the method in StreamingRenderer.
-     *
-     * @param styles
-     * @param q
      */
     private Filter processRuleForQuery(FeatureTypeStyle[] styles) {
         try {
@@ -115,26 +112,16 @@ public class EncodeHTMLImageMap extends WebMap {
 
             final int stylesLength = styles.length;
 
-            int styleRulesLength;
             FeatureTypeStyle style;
-            int u = 0;
-            Rule r;
 
             for (int t = 0; t < stylesLength; t++) // look at each
             // featuretypestyle
             {
                 style = styles[t];
 
-                Rule[] rules = style.getRules();
-                styleRulesLength = rules.length;
-
-                for (u = 0; u < styleRulesLength; u++) // look at each
-                // rule in the
-                // featuretypestyle
-                {
-                    r = rules[u];
+                for (Rule r : style.rules()) {
                     if (r.getFilter() == null) return null; // uh-oh has no filter (want all rows)
-                    if (r.hasElseFilter()) return null; // uh-oh has elseRule
+                    if (r.isElseFilter()) return null; // uh-oh has elseRule
                     filtersToDS.add(r.getFilter());
                 }
             }
@@ -185,28 +172,25 @@ public class EncodeHTMLImageMap extends WebMap {
      */
     protected FeatureTypeStyle[] filterFeatureTypeStyles(
             Style style, SimpleFeatureType featureType) {
-        FeatureTypeStyle[] featureTypeStyles = style.getFeatureTypeStyles();
+        List<FeatureTypeStyle> featureTypeStyles = style.featureTypeStyles();
 
-        if ((featureTypeStyles == null) || (featureTypeStyles.length == 0)) {
+        if (featureTypeStyles.isEmpty()) {
             return new FeatureTypeStyle[0];
         }
 
-        List<FeatureTypeStyle> filtered = new ArrayList<FeatureTypeStyle>(featureTypeStyles.length);
+        List<FeatureTypeStyle> filtered = new ArrayList<>(featureTypeStyles.size());
 
-        for (int i = 0; i < featureTypeStyles.length; i++) {
-            FeatureTypeStyle featureTypeStyle = featureTypeStyles[i];
-            String featureTypeName = featureTypeStyle.getFeatureTypeName();
-            Rule[] rules = featureTypeStyle.getRules();
-            if (rules != null) rules = filterRules(rules);
-            // does this style have any rules
-            if (rules == null || rules.length == 0) {
-                continue;
-            }
-            featureTypeStyle.setRules(rules);
+        for (FeatureTypeStyle featureTypeStyle : featureTypeStyles) {
+            Rule[] rules = filterRules(featureTypeStyle.rules());
+            featureTypeStyle.rules().clear();
+            featureTypeStyle.rules().addAll(Arrays.asList(rules));
 
             // does this style apply to the feature collection
-            if (featureType.getTypeName().equalsIgnoreCase(featureTypeName)
-                    || FeatureTypes.isDecendedFrom(featureType, null, featureTypeName)) {
+            if (featureTypeStyle.featureTypeNames().isEmpty()
+                    || featureTypeStyle
+                            .featureTypeNames()
+                            .stream()
+                            .anyMatch(tn -> FeatureTypes.matches(featureType, tn))) {
                 filtered.add(featureTypeStyle);
             }
         }
@@ -226,15 +210,10 @@ public class EncodeHTMLImageMap extends WebMap {
                 && ((r.getMaxScaleDenominator()) > scaleDenominator);
     }
 
-    /**
-     * Filter given rules, to consider only the rules compatible with the current scale.
-     *
-     * @param rules
-     */
-    private Rule[] filterRules(Rule[] rules) {
+    /** Filter given rules, to consider only the rules compatible with the current scale. */
+    private Rule[] filterRules(List<Rule> rules) {
         List<Rule> result = new ArrayList<Rule>();
-        for (int count = 0; count < rules.length; count++) {
-            Rule rule = rules[count];
+        for (Rule rule : rules) {
             double scaleDenominator;
             try {
                 scaleDenominator =
@@ -331,7 +310,7 @@ public class EncodeHTMLImageMap extends WebMap {
 
                     // set the actual filter
                     // q.setFilter(ruleFilter);
-                    q = new DefaultQuery(schema.getTypeName(), ruleFilter);
+                    q = new Query(schema.getTypeName(), ruleFilter);
                     // q = (Query) DataUtilities.mixQueries(new
                     // Query(schema.getTypeName(),ruleFilter), q, "HTMLImageMapEncoder");
                 }

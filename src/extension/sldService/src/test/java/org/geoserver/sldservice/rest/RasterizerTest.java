@@ -18,6 +18,7 @@ import org.geotools.styling.ColorMap;
 import org.geotools.styling.ColorMapEntry;
 import org.geotools.styling.RasterSymbolizer;
 import org.geotools.styling.Rule;
+import org.geotools.styling.Style;
 import org.junit.Test;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
@@ -79,9 +80,26 @@ public class RasterizerTest extends SLDServiceBaseTest {
     }
 
     @Test
+    public void testRasterizeFeatureTypeName() throws Exception {
+        LayerInfo l = getCatalog().getLayerByName("wcs:World");
+        assertEquals("raster", l.getDefaultStyle().getName());
+        final String restPath =
+                RestBaseController.ROOT_PATH + "/sldservice/wcs:World/" + getServiceUrl() + ".xml";
+        MockHttpServletResponse response = getAsServletResponse(restPath);
+        assertTrue(response.getStatus() == 200);
+        Document dom = getAsDOM(restPath, 200);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        print(dom, baos);
+        assertTrue(
+                baos.toString().indexOf("<sld:FeatureTypeName>Feature</sld:FeatureTypeName>") > 0);
+        checkColorMap(baos.toString(), 100);
+    }
+
+    @Test
     public void testRasterizeOptions() throws Exception {
         LayerInfo l = getCatalog().getLayerByName("wcs:World");
         assertEquals("raster", l.getDefaultStyle().getName());
+        Style defaultStyle1 = l.getDefaultStyle().getStyle();
         final String restPath =
                 RestBaseController.ROOT_PATH
                         + "/sldservice/wcs:World/"
@@ -97,12 +115,15 @@ public class RasterizerTest extends SLDServiceBaseTest {
         ColorMap map = checkColorMap(baos.toString(), 5);
         checkColorEntry(map.getColorMapEntries()[1], "#FF0000", "10.0", "1.0");
         checkColorEntry(map.getColorMapEntries()[5], "#0000FF", "50.0", "1.0");
+        Style defaultStyle2 = l.getDefaultStyle().getStyle();
+        assertEquals(defaultStyle1, defaultStyle2);
     }
 
     @Test
     public void testRasterizeOptions2() throws Exception {
         LayerInfo l = getCatalog().getLayerByName("wcs:World");
         assertEquals("raster", l.getDefaultStyle().getName());
+        Style defaultStyle1 = l.getDefaultStyle().getStyle();
         final String restPath =
                 RestBaseController.ROOT_PATH
                         + "/sldservice/wcs:World/"
@@ -118,16 +139,18 @@ public class RasterizerTest extends SLDServiceBaseTest {
         ColorMap map = checkColorMap(baos.toString(), 5);
         checkColorEntry(map.getColorMapEntries()[1], "#FF0000", "10.00", "1.0");
         checkColorEntry(map.getColorMapEntries()[5], "#0000FF", "50.00", "1.0");
+        Style defaultStyle2 = l.getDefaultStyle().getStyle();
+        assertEquals(defaultStyle1, defaultStyle2);
     }
 
     private ColorMap checkColorMap(String resultXml, int classes) {
         Rule[] rules = checkSLD(resultXml);
         assertEquals(1, rules.length);
         Rule rule = rules[0];
-        assertNotNull(rule.getSymbolizers());
-        assertEquals(1, rule.getSymbolizers().length);
-        assertTrue(rule.getSymbolizers()[0] instanceof RasterSymbolizer);
-        RasterSymbolizer symbolizer = (RasterSymbolizer) rule.getSymbolizers()[0];
+        assertNotNull(rule.symbolizers());
+        assertEquals(1, rule.symbolizers().size());
+        assertTrue(rule.symbolizers().get(0) instanceof RasterSymbolizer);
+        RasterSymbolizer symbolizer = (RasterSymbolizer) rule.symbolizers().get(0);
         assertNotNull(symbolizer.getColorMap());
         assertEquals(classes + 1, symbolizer.getColorMap().getColorMapEntries().length);
         ColorMapEntry firstEntry = symbolizer.getColorMap().getColorMapEntries()[0];

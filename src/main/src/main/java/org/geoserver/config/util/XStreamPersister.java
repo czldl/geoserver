@@ -25,7 +25,6 @@ import com.thoughtworks.xstream.converters.reflection.ReflectionProvider;
 import com.thoughtworks.xstream.converters.reflection.SortableFieldKeySorter;
 import com.thoughtworks.xstream.converters.reflection.SunUnsafeReflectionProvider;
 import com.thoughtworks.xstream.core.ClassLoaderReference;
-import com.thoughtworks.xstream.io.ExtendedHierarchicalStreamWriterHelper;
 import com.thoughtworks.xstream.io.HierarchicalStreamDriver;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
@@ -57,7 +56,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.commons.collections.MultiHashMap;
+import org.apache.commons.collections.map.MultiValueMap;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.mapped.MappedXMLStreamWriter;
 import org.codehaus.jettison.util.FastStack;
@@ -224,27 +223,12 @@ public class XStreamPersister {
         protected void postEncodeLayerGroup(
                 LayerGroupInfo ls, HierarchicalStreamWriter writer, MarshallingContext context) {}
 
-        /**
-         * @deprecated use {@link #postEncodeReference(Object, String, String,
-         *     HierarchicalStreamWriter, MarshallingContext)}
-         */
-        protected void postEncodeReference(
-                Object obj,
-                String ref,
-                HierarchicalStreamWriter writer,
-                MarshallingContext context) {}
-
         protected void postEncodeReference(
                 Object obj,
                 String ref,
                 String prefix,
                 HierarchicalStreamWriter writer,
-                MarshallingContext context) {
-            if (prefix == null) {
-                // call other method for backward compatability
-                postEncodeReference(obj, ref, writer, context);
-            }
-        }
+                MarshallingContext context) {}
 
         protected void postEncodeWMSStore(
                 WMSStoreInfo store, HierarchicalStreamWriter writer, MarshallingContext context) {}
@@ -313,8 +297,6 @@ public class XStreamPersister {
     /**
      * Sets null handling in proxy objects. Defaults to unwrap. If set to false, proxy object are
      * not transformed to nulls.
-     *
-     * @param unwrapNulls
      */
     public void setUnwrapNulls(boolean unwrapNulls) {
         this.unwrapNulls = unwrapNulls;
@@ -390,7 +372,7 @@ public class XStreamPersister {
         xs.omitField(impl(DefaultCatalogFacade.class), "layerGroups");
 
         xs.registerLocalConverter(
-                DefaultCatalogFacade.class, "stores", new StoreMultiHashMapConverter());
+                DefaultCatalogFacade.class, "stores", new StoreMultiValueMapConverter());
         xs.registerLocalConverter(
                 DefaultCatalogFacade.class, "namespaces", new SpaceMapConverter("namespace"));
         xs.registerLocalConverter(
@@ -539,6 +521,7 @@ public class XStreamPersister {
         xs.registerConverter(new VirtualTableConverter());
         xs.registerConverter(new KeywordInfoConverter());
         xs.registerConverter(new SettingsInfoConverter());
+        xs.registerConverter(new WMSLayerInfoConverter());
         // this should have been a metadata map too, but was not registered as such and got a plain
         // map converter. Switched to SettingsTolerantMapConverter to make it work when plugins get
         // removed and leave configuration that cannot be parsed anymore in there
@@ -570,9 +553,6 @@ public class XStreamPersister {
      * Use this method to register complex types that cannot be simply represented as a string in a
      * {@link BreifMapConverter}. The {@code typeId} will be used as a type discriminator in the
      * brief map, as well as the element root for the complex object to be converted.
-     *
-     * @param typeId
-     * @param clazz
      */
     public void registerBreifMapComplexType(String typeId, Class clazz) {
         forwardBreifMap.put(typeId, clazz);
@@ -655,7 +635,6 @@ public class XStreamPersister {
      *
      * @param obj The object to save.
      * @param out The stream to save the object to.
-     * @throws IOException
      */
     public void save(Object obj, OutputStream out) throws IOException {
         // unwrap dynamic proxies
@@ -680,7 +659,6 @@ public class XStreamPersister {
      *
      * @param in The input stream to read the object from.
      * @param clazz The class of the expected object.
-     * @throws IOException
      */
     public <T> T load(InputStream in, Class<T> clazz) throws IOException {
         T obj = clazz.cast(xs.fromXML(in));
@@ -698,8 +676,6 @@ public class XStreamPersister {
     /**
      * Builds a converter that will marshal/unmarshal the target class by reference, that is, by
      * storing the object id as opposed to fully serializing it
-     *
-     * @param clazz
      */
     public ReferenceConverter buildReferenceConverter(Class clazz) {
         return new ReferenceConverter(clazz);
@@ -707,8 +683,6 @@ public class XStreamPersister {
 
     /**
      * Same as {@link #buildReferenceConverter(Class)}, but works against a collection of objects
-     *
-     * @param clazz
      */
     public ReferenceCollectionConverter buildReferenceCollectionConverter(Class clazz) {
         return new ReferenceCollectionConverter(clazz);
@@ -929,7 +903,7 @@ public class XStreamPersister {
                         reader.moveDown();
                     }
 
-                    value = readItem(reader, context, map);
+                    value = readBareItem(reader, context, map);
 
                     if (old) {
                         reader.moveUp();
@@ -943,7 +917,7 @@ public class XStreamPersister {
         }
 
         @Override
-        protected Object readItem(
+        protected Object readBareItem(
                 HierarchicalStreamReader reader, UnmarshallingContext context, Object current) {
             return reader.getValue();
         }
@@ -1048,11 +1022,11 @@ public class XStreamPersister {
             Object value;
             try {
                 reader.moveDown();
-                key = readItem(reader, context, map);
+                key = readBareItem(reader, context, map);
                 reader.moveUp();
 
                 reader.moveDown();
-                value = readItem(reader, context, map);
+                value = readBareItem(reader, context, map);
             } catch (CannotResolveClassException e) {
                 LOGGER.log(
                         Level.WARNING,
@@ -1117,7 +1091,7 @@ public class XStreamPersister {
                     if (v != null) {
                         writer.startNode("entry");
                         writer.addAttribute("key", key.toString());
-                        writeItem(v, context, writer);
+                        writeCompleteItem(v, context, writer);
                         writer.endNode();
                     }
                 }
@@ -1133,7 +1107,7 @@ public class XStreamPersister {
                 // in this case we also support complex objects
                 while (reader.hasMoreChildren()) {
                     reader.moveDown();
-                    value = readItem(reader, context, map);
+                    value = readBareItem(reader, context, map);
                     reader.moveUp();
                 }
                 reader.moveUp();
@@ -1271,7 +1245,7 @@ public class XStreamPersister {
         }
 
         @Override
-        protected void writeItem(
+        protected void writeCompleteItem(
                 Object item, MarshallingContext context, HierarchicalStreamWriter writer) {
             ClassAliasingMapper cam =
                     (ClassAliasingMapper) mapper().lookupMapperOfType(ClassAliasingMapper.class);
@@ -1327,7 +1301,7 @@ public class XStreamPersister {
         }
 
         @Override
-        protected Object readItem(
+        protected Object readBareItem(
                 HierarchicalStreamReader reader, UnmarshallingContext context, Object current) {
             Class theClass = clazz;
             if (subclasses != null) {
@@ -1347,10 +1321,10 @@ public class XStreamPersister {
         }
 
         @Override
-        protected void writeItem(
+        protected void writeCompleteItem(
                 Object item, MarshallingContext context, HierarchicalStreamWriter writer) {
 
-            super.writeItem(unwrapProxies(item), context, writer);
+            super.writeCompleteItem(unwrapProxies(item), context, writer);
         }
     }
 
@@ -1547,7 +1521,7 @@ public class XStreamPersister {
             }
 
             GridGeometry2D gg = new GridGeometry2D(gridRange, gridToCRS, crs);
-            return serializationMethodInvoker.callReadResolve(gg);
+            return serializationMembers.callReadResolve(gg);
         }
 
         int[] toIntArray(String s) {
@@ -1828,14 +1802,14 @@ public class XStreamPersister {
     }
 
     /** Converter for multi hash maps containing coverage stores and data stores. */
-    static class StoreMultiHashMapConverter implements Converter {
+    static class StoreMultiValueMapConverter implements Converter {
         public boolean canConvert(Class type) {
-            return MultiHashMap.class.equals(type);
+            return MultiValueMap.class.equals(type);
         }
 
         public void marshal(
                 Object source, HierarchicalStreamWriter writer, MarshallingContext context) {
-            MultiHashMap map = (MultiHashMap) source;
+            MultiValueMap map = (MultiValueMap) source;
             for (Object v : map.values()) {
                 if (v instanceof DataStoreInfo) {
                     writer.startNode("dataStore");
@@ -1851,7 +1825,7 @@ public class XStreamPersister {
         }
 
         public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
-            MultiHashMap map = new MultiHashMap();
+            MultiValueMap map = new MultiValueMap();
 
             while (reader.hasMoreChildren()) {
                 reader.moveDown();
@@ -2421,15 +2395,15 @@ public class XStreamPersister {
         }
 
         @Override
-        protected Object readItem(
+        protected Object readBareItem(
                 HierarchicalStreamReader reader, UnmarshallingContext context, Object current) {
             return context.convertAnother(current, Keyword.class);
         }
 
         @Override
-        protected void writeItem(
+        protected void writeCompleteItem(
                 Object item, MarshallingContext context, HierarchicalStreamWriter writer) {
-            ExtendedHierarchicalStreamWriterHelper.startNode(writer, "string", Keyword.class);
+            writer.startNode("string");
             context.convertAnother(item);
             writer.endNode();
         }
@@ -2543,6 +2517,32 @@ public class XStreamPersister {
                 }
             }
             return obj.toString();
+        }
+    }
+
+    /**
+     * Converter for WMSLayerInfoImpl class ensure backwards compatibility with <= 2.16.2 data
+     * directories
+     */
+    class WMSLayerInfoConverter extends AbstractCatalogInfoConverter {
+
+        public WMSLayerInfoConverter() {
+            super(WMSLayerInfoImpl.class);
+        }
+
+        public Object doUnmarshal(
+                Object result, HierarchicalStreamReader reader, UnmarshallingContext context) {
+            WMSLayerInfoImpl obj = (WMSLayerInfoImpl) super.doUnmarshal(result, reader, context);
+            // setting the minimal defaults and clean object with no NULL values
+            if (obj.getPreferredFormat() == null) {
+                obj.setPreferredFormat(WMSLayerInfoImpl.DEFAULT_FORMAT);
+                obj.setSelectedRemoteFormats(new ArrayList<String>());
+            }
+            if (obj.getForcedRemoteStyle() == null) {
+                obj.setForcedRemoteStyle(WMSLayerInfoImpl.DEFAULT_ON_REMOTE.getName());
+                obj.setSelectedRemoteStyles(new ArrayList<String>());
+            }
+            return obj;
         }
     }
 }

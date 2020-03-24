@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Logger;
 import net.opengis.wcs10.DescribeCoverageType;
+import org.apache.commons.lang3.StringUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.CoverageStoreInfo;
@@ -205,7 +206,7 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
             start("wcs:CoverageOffering");
             for (MetadataLinkInfo mdl : ci.getMetadataLinks()) handleMetadataLink(mdl, "simple");
             element("wcs:description", ci.getDescription());
-            element("wcs:name", ci.getPrefixedName());
+            element("wcs:name", ci.prefixedName());
             element("wcs:label", ci.getTitle());
             handleLonLatEnvelope(ci, ci.getLatLonBoundingBox());
             handleKeywords(ci.getKeywords());
@@ -222,11 +223,11 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
         private void handleMetadataLink(MetadataLinkInfo mdl, String linkType) {
             AttributesImpl attributes = new AttributesImpl();
 
-            if ((mdl.getAbout() != null) && (mdl.getAbout() != "")) {
+            if (StringUtils.isNotBlank(mdl.getAbout())) {
                 attributes.addAttribute("", "about", "about", "", mdl.getAbout());
             }
 
-            if ((mdl.getMetadataType() != null) && (mdl.getMetadataType() != "")) {
+            if (StringUtils.isNotBlank(mdl.getMetadataType())) {
                 attributes.addAttribute(
                         "", "metadataType", "metadataType", "", mdl.getMetadataType());
             }
@@ -235,7 +236,7 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
                 attributes.addAttribute("", "xlink:type", "xlink:type", "", linkType);
             }
 
-            if ((mdl.getContent() != null) && (mdl.getContent() != "")) {
+            if (StringUtils.isNotBlank(mdl.getContent())) {
                 attributes.addAttribute(
                         "",
                         "xlink:href",
@@ -249,10 +250,7 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
             }
         }
 
-        /**
-         * @param lonLatEnvelope
-         * @throws IOException
-         */
+        /** */
         private void handleLonLatEnvelope(CoverageInfo ci, ReferencedEnvelope referencedEnvelope)
                 throws IOException {
 
@@ -360,13 +358,7 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
             end("wcs:domainSet");
         }
 
-        /**
-         * @param referencedEnvelope
-         * @param elevationMetadata
-         * @param timeMetadata
-         * @param set2
-         * @param set
-         */
+        /** */
         private void handleBoundingBox(
                 String srsName,
                 ReferencedEnvelope referencedEnvelope,
@@ -407,11 +399,7 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
             }
         }
 
-        /**
-         * @param ci
-         * @param timeMetadata
-         * @param elevationMetadata
-         */
+        /** */
         private void handleTemporalDomain(
                 CoverageInfo ci, DimensionInfo timeInfo, ReaderDimensionsAccessor dimensions)
                 throws IOException {
@@ -455,15 +443,12 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
             end("wcs:temporalDomain");
         }
 
-        /**
-         * @param ci
-         * @param elevationMetadata
-         */
+        /** */
         private void handleGrid(CoverageInfo ci) throws Exception {
             final GridGeometry originalGrid = ci.getGrid();
             final GridEnvelope gridRange = originalGrid.getGridRange();
             final AffineTransform2D gridToCRS = (AffineTransform2D) originalGrid.getGridToCRS();
-            final int gridDimension = (gridToCRS != null ? gridToCRS.getSourceDimensions() : 0);
+            final int gridDimension = gridToCRS.getSourceDimensions();
 
             AttributesImpl attributes = new AttributesImpl();
             attributes.addAttribute(
@@ -519,11 +504,7 @@ public class Wcs10DescribeCoverageTransformer extends TransformerBase {
             end("gml:RectifiedGrid");
         }
 
-        /**
-         * @param ci
-         * @param field
-         * @throws IOException
-         */
+        /** */
         private void handleRange(CoverageInfo ci) throws IOException {
             // rangeSet
             start("wcs:rangeSet");

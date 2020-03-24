@@ -16,11 +16,11 @@ import org.geoserver.catalog.event.CatalogListener;
 import org.geoserver.catalog.event.CatalogModifyEvent;
 import org.geoserver.catalog.event.CatalogPostModifyEvent;
 import org.geoserver.catalog.event.CatalogRemoveEvent;
-import org.geoserver.data.util.IOUtils;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.platform.resource.Paths;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resources;
+import org.geoserver.util.IOUtils;
 import org.geotools.util.logging.Logging;
 
 /**
@@ -41,10 +41,6 @@ public class EoStyleCatalogListener implements CatalogListener, EoStyles {
     /**
      * Create WMS-EO styles if they are not present in the Catalog and start listening to Catalog
      * events.
-     *
-     * @param catalog
-     * @param resourceLoader
-     * @throws IOException
      */
     public EoStyleCatalogListener(Catalog catalog, GeoServerResourceLoader resourceLoader)
             throws IOException {
@@ -54,11 +50,7 @@ public class EoStyleCatalogListener implements CatalogListener, EoStyles {
         catalog.addListener(this);
     }
 
-    /**
-     * Create WMS-EO styles if they are not present in the Catalog
-     *
-     * @throws IOException
-     */
+    /** Create WMS-EO styles if they are not present in the Catalog */
     private void initializeStyles() throws IOException {
         for (int i = 0; i < EO_STYLE_NAMES.length; i++) {
             String name = EO_STYLE_NAMES[i];

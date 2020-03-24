@@ -97,7 +97,7 @@ public class FileStrategy implements ServiceStrategy {
                             + " safe is "
                             + safe
                             + ", temp exists "
-                            + temp.exists());
+                            + (temp == null ? "false" : temp.exists()));
             throw new IllegalStateException("flush should only be called after getDestination");
         }
 
@@ -112,6 +112,7 @@ public class FileStrategy implements ServiceStrategy {
             // copy result to the real output stream
             copy = new BufferedInputStream(new FileInputStream(temp));
 
+            @SuppressWarnings("PMD.CloseResource") // managed by servlet container
             OutputStream out = response.getOutputStream();
             out = new BufferedOutputStream(out, 1024 * 1024);
 

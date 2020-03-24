@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.StringReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,19 +48,24 @@ public class CssHandler extends StyleHandler {
         try {
             TEMPLATES.put(
                     StyleType.POINT,
-                    IOUtils.toString(CssHandler.class.getResourceAsStream("template_point.css")));
+                    IOUtils.toString(
+                            CssHandler.class.getResourceAsStream("template_point.css"), "UTF-8"));
             TEMPLATES.put(
                     StyleType.POLYGON,
-                    IOUtils.toString(CssHandler.class.getResourceAsStream("template_polygon.css")));
+                    IOUtils.toString(
+                            CssHandler.class.getResourceAsStream("template_polygon.css"), "UTF-8"));
             TEMPLATES.put(
                     StyleType.LINE,
-                    IOUtils.toString(CssHandler.class.getResourceAsStream("template_line.css")));
+                    IOUtils.toString(
+                            CssHandler.class.getResourceAsStream("template_line.css"), "UTF-8"));
             TEMPLATES.put(
                     StyleType.RASTER,
-                    IOUtils.toString(CssHandler.class.getResourceAsStream("template_raster.css")));
+                    IOUtils.toString(
+                            CssHandler.class.getResourceAsStream("template_raster.css"), "UTF-8"));
             TEMPLATES.put(
                     StyleType.GENERIC,
-                    IOUtils.toString(CssHandler.class.getResourceAsStream("template_generic.css")));
+                    IOUtils.toString(
+                            CssHandler.class.getResourceAsStream("template_generic.css"), "UTF-8"));
         } catch (IOException e) {
             throw new RuntimeException("Error loading up the css style templates", e);
         }
@@ -167,5 +174,15 @@ public class CssHandler extends StyleHandler {
     @Override
     public String getCodeMirrorEditMode() {
         return "text/geocss";
+    }
+
+    @Override
+    public URL getSpecification(Version version) throws MalformedURLException {
+        return new URL("https://docs.geoserver.org/latest/en/user/styling/css/index.html");
+    }
+
+    @Override
+    public String getFileExtension() {
+        return "css";
     }
 }

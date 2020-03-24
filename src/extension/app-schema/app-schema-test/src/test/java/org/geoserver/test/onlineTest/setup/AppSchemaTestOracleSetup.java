@@ -14,10 +14,10 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import org.apache.commons.lang3.StringUtils;
 import org.geotools.data.property.PropertyFeatureReader;
-import org.geotools.feature.IllegalAttributeException;
 import org.geotools.util.Classes;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.io.WKTWriter;
+import org.opengis.feature.IllegalAttributeException;
 import org.opengis.feature.Property;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
@@ -125,9 +125,6 @@ public class AppSchemaTestOracleSetup extends ReferenceDataOracleSetup {
      *
      * @param propertyFiles Property files from app-schema-test suite.
      * @param parser The parser (WKT or an SC4O one for 3D tests)
-     * @throws IllegalAttributeException
-     * @throws NoSuchElementException
-     * @throws IOException
      */
     private void createTables(Map<String, File> propertyFiles, String parser)
             throws IllegalAttributeException, NoSuchElementException, IOException {
@@ -267,7 +264,7 @@ public class AppSchemaTestOracleSetup extends ReferenceDataOracleSetup {
                             // be supported if present.
                             Geometry geom = (Geometry) value;
                             value =
-                                    new WKTWriter(Double.isNaN(geom.getCoordinate().z) ? 2 : 3)
+                                    new WKTWriter(Double.isNaN(geom.getCoordinate().getZ()) ? 2 : 3)
                                             .write(geom);
                         }
                         if (value == null || value.toString().equalsIgnoreCase("null")) {

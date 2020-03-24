@@ -53,8 +53,9 @@ public class OpenLayersMapTemplateTest extends WMSTestSupport {
         HashMap map = new HashMap();
         map.put("context", mapContent);
         map.put("request", mapContent.getRequest());
-        map.put("maxResolution", new Double(0.0005)); // just a random number
+        map.put("maxResolution", Double.valueOf(0.0005)); // just a random number
         map.put("baseUrl", "http://localhost:8080/geoserver/wms");
+        map.put("relBaseUrl", "//localhost:8080/geoserver/wms");
         map.put("parameters", new ArrayList());
         map.put("layerName", "layer");
         map.put("units", "degrees");

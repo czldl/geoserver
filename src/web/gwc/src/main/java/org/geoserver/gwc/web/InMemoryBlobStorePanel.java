@@ -302,7 +302,7 @@ public class InMemoryBlobStorePanel extends Panel {
 
         @Override
         public void validate(IValidatable<Long> iv) {
-            if (iv == null || iv.getValue() <= 0) {
+            if (iv.getValue() <= 0) {
                 ValidationError error = new ValidationError();
                 error.setMessage(new ParamResourceModel(errorKey, null, "").getObject());
                 iv.error(error);
@@ -320,7 +320,7 @@ public class InMemoryBlobStorePanel extends Panel {
 
         @Override
         public void validate(IValidatable<Integer> iv) {
-            if (iv == null || iv.getValue() <= 0) {
+            if (iv.getValue() <= 0) {
                 ValidationError error = new ValidationError();
                 error.setMessage(
                         new ParamResourceModel("BlobStorePanel.invalidConcurrency", null, "")
@@ -372,9 +372,6 @@ public class InMemoryBlobStorePanel extends Panel {
         /**
          * This method removes all the previous mappings from the container and then adds the
          * components again by setting as default value the one taken from the key mapped.
-         *
-         * @param key
-         * @param gwcConfigModel
          */
         public void setMapKey(final String key, IModel<GWCConfig> gwcConfigModel) {
             removeAll();

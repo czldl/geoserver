@@ -25,17 +25,6 @@ public class SLDValidator {
 
     public SLDValidator() {}
 
-    /**
-     * validates against the SLD schema in the classpath
-     *
-     * @param xml
-     * @param baseUrl GeoServer base URL
-     */
-    @Deprecated
-    public List validateSLD(InputStream xml, String baseUrl) {
-        return validateSLD(xml);
-    }
-
     /** Validates against the SLD schema in the classpath */
     public List validateSLD(InputStream xml) {
         return validateSLD(new InputSource(xml));
@@ -56,9 +45,6 @@ public class SLDValidator {
     /**
      * returns a better formated error message - suitable for framing. There's a more complex
      * version in StylesEditorAction. This will kick out a VERY LARGE errorMessage.
-     *
-     * @param xml
-     * @param errors
      */
     public static String getErrorMessage(Reader xml, List errors) {
         BufferedReader reader = null;
@@ -172,17 +158,6 @@ public class SLDValidator {
         }
 
         return result.toString();
-    }
-
-    /**
-     * validate a .sld against the schema
-     *
-     * @param xml input stream representing the .sld file
-     * @return list of SAXExceptions (0 if the file's okay)
-     */
-    @Deprecated
-    public List validateSLD(InputSource xml, String baseUrl) {
-        return validateSLD(xml);
     }
 
     /**

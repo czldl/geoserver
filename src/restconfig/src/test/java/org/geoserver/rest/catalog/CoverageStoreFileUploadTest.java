@@ -5,7 +5,9 @@
  */
 package org.geoserver.rest.catalog;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -21,6 +23,7 @@ import org.custommonkey.xmlunit.XMLAssert;
 import org.geoserver.catalog.CatalogBuilder;
 import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.CoverageStoreInfo;
+import org.geoserver.catalog.DataStoreInfo;
 import org.geoserver.catalog.WorkspaceInfo;
 import org.geoserver.data.test.MockData;
 import org.geoserver.data.test.SystemTestData;
@@ -32,7 +35,9 @@ import org.geoserver.rest.util.IOUtils;
 import org.geoserver.rest.util.RESTUtils;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
 import org.geotools.coverage.grid.io.StructuredGridCoverage2DReader;
-import org.geotools.data.DataUtilities;
+import org.geotools.data.DataStore;
+import org.geotools.data.Query;
+import org.geotools.data.simple.SimpleFeatureSource;
 import org.geotools.gce.imagemosaic.ImageMosaicFormat;
 import org.geotools.util.URLs;
 import org.geotools.util.factory.GeoTools;
@@ -41,11 +46,28 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.opengis.coverage.grid.GridCoverageReader;
 import org.opengis.referencing.FactoryException;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.w3c.dom.Document;
 
 public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
+
+    @Override
+    protected void onSetUp(SystemTestData testData) throws Exception {
+        super.onSetUp(testData);
+
+        CatalogBuilder cb = new CatalogBuilder(getCatalog());
+        DataStoreInfo store = cb.buildDataStore("h2test");
+        store.getConnectionParameters().put("dbtype", "h2");
+        store.getConnectionParameters()
+                .put(
+                        "database",
+                        new File(getDataDirectory().findOrCreateDir("data"), "h2_test")
+                                .getAbsolutePath());
+        store.getConnectionParameters().put("MVCC", true);
+        catalog.save(store);
+    }
 
     @Before
     public void cleanup() throws IOException {
@@ -69,6 +91,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
                         bytes,
                         "application/zip");
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.APPLICATION_XML_VALUE, response.getContentType());
 
         String content = response.getContentAsString();
         Document d = dom(new ByteArrayInputStream(content.getBytes()));
@@ -101,14 +124,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
     @Test
     public void testUploadImageMosaic() throws Exception {
         URL zip = MockData.class.getResource("watertemp.zip");
-        InputStream is = null;
-        byte[] bytes;
-        try {
-            is = zip.openStream();
-            bytes = IOUtils.toByteArray(is);
-        } finally {
-            IOUtils.closeQuietly(is);
-        }
+        byte[] bytes = getBytes(zip);
 
         MockHttpServletResponse response =
                 putAsServletResponse(
@@ -117,6 +133,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
                         bytes,
                         "application/zip");
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.APPLICATION_XML_VALUE, response.getContentType());
 
         // check the response contents
         String content = response.getContentAsString();
@@ -134,17 +151,52 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
     }
 
     @Test
+    public void testUploadImageMosaicRepoReference() throws Exception {
+        URL zip = CoverageStoreFileUploadTest.class.getResource("watertemp-repo.zip");
+        byte[] bytes = getBytes(zip);
+
+        MockHttpServletResponse response =
+                putAsServletResponse(
+                        RestBaseController.ROOT_PATH
+                                + "/workspaces/gs/coveragestores/watertemp-repo/file.imagemosaic",
+                        bytes,
+                        "application/zip");
+        assertEquals(201, response.getStatus());
+        assertEquals(MediaType.APPLICATION_XML_VALUE, response.getContentType());
+
+        // check the response contents
+        String content = response.getContentAsString();
+        Document d = dom(new ByteArrayInputStream(content.getBytes()));
+
+        XMLAssert.assertXpathEvaluatesTo("watertemp-repo", "//coverageStore/name", d);
+        XMLAssert.assertXpathEvaluatesTo("ImageMosaic", "//coverageStore/type", d);
+
+        // check the coverage is actually there
+        CoverageStoreInfo storeInfo = getCatalog().getCoverageStoreByName("watertemp-repo");
+        assertNotNull(storeInfo);
+        CoverageInfo ci = getCatalog().getCoverageByName("watertemp-repo");
+        assertNotNull(ci);
+        assertEquals(storeInfo, ci.getStore());
+
+        // check harvesting happened as expected
+        DataStore ds = (DataStore) getCatalog().getDataStoreByName("h2test").getDataStore(null);
+        assertNotNull(ds);
+        SimpleFeatureSource fs = ds.getFeatureSource("watertemp-repo");
+        assertNotNull(fs);
+        assertEquals(4, fs.getCount(Query.ALL));
+    }
+
+    public byte[] getBytes(URL zip) throws IOException {
+        try (InputStream is = zip.openStream()) {
+            return IOUtils.toByteArray(is);
+        }
+    }
+
+    @Test
     public void testHarvestImageMosaic() throws Exception {
         // Upload of the Mosaic via REST
         URL zip = MockData.class.getResource("watertemp.zip");
-        InputStream is = null;
-        byte[] bytes;
-        try {
-            is = zip.openStream();
-            bytes = IOUtils.toByteArray(is);
-        } finally {
-            IOUtils.closeQuietly(is);
-        }
+        byte[] bytes = getBytes(zip);
 
         MockHttpServletResponse response =
                 putAsServletResponse(
@@ -153,6 +205,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
                         bytes,
                         "application/zip");
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.APPLICATION_XML_VALUE, response.getContentType());
 
         // check the response contents
         String content = response.getContentAsString();
@@ -171,12 +224,8 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
         // Harvesting of the Mosaic
         URL zipHarvest = MockData.class.getResource("harvesting.zip");
         // Extract a Byte array from the zip file
-        is = null;
-        try {
-            is = zipHarvest.openStream();
+        try (InputStream is = zipHarvest.openStream()) {
             bytes = IOUtils.toByteArray(is);
-        } finally {
-            IOUtils.closeQuietly(is);
         }
         // Create the POST request
         MockHttpServletRequest request =
@@ -209,14 +258,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
         // Harvesting of the Mosaic
         URL zipHarvest = MockData.class.getResource("harvesting.zip");
         // Extract a Byte array from the zip file
-        InputStream is = null;
-        byte[] bytes;
-        try {
-            is = zipHarvest.openStream();
-            bytes = IOUtils.toByteArray(is);
-        } finally {
-            IOUtils.closeQuietly(is);
-        }
+        byte[] bytes = getBytes(zipHarvest);
         // Create the POST request
         MockHttpServletRequest request =
                 createRequest(
@@ -235,14 +277,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
     public void testHarvestImageMosaicWithDirectory() throws Exception {
         // Upload of the Mosaic via REST
         URL zip = MockData.class.getResource("watertemp.zip");
-        InputStream is = null;
-        byte[] bytes;
-        try {
-            is = zip.openStream();
-            bytes = IOUtils.toByteArray(is);
-        } finally {
-            IOUtils.closeQuietly(is);
-        }
+        byte[] bytes = getBytes(zip);
 
         MockHttpServletResponse response =
                 putAsServletResponse(
@@ -251,6 +286,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
                         bytes,
                         "application/zip");
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.APPLICATION_XML_VALUE, response.getContentType());
 
         // check the response contents
         String content = response.getContentAsString();
@@ -331,7 +367,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
 
         try {
             // Selection of the reader to use for the mosaic
-            reader = imageMosaicFormat.getReader(DataUtilities.fileToURL(Resources.find(mosaic)));
+            reader = imageMosaicFormat.getReader(URLs.fileToUrl(Resources.find(mosaic)));
 
             // configure the coverage
             configureCoverageInfo(builder, store, reader);
@@ -346,14 +382,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
             // Harvesting of the Mosaic
             URL zipHarvest = MockData.class.getResource("harvesting.zip");
             // Extract a Byte array from the zip file
-            InputStream is = null;
-            byte[] bytes;
-            try {
-                is = zipHarvest.openStream();
-                bytes = IOUtils.toByteArray(is);
-            } finally {
-                IOUtils.closeQuietly(is);
-            }
+            byte[] bytes = getBytes(zipHarvest);
             // Create the POST request
             MockHttpServletRequest request =
                     createRequest(
@@ -429,7 +458,7 @@ public class CoverageStoreFileUploadTest extends CatalogRESTTestSupport {
 
         try {
             // Selection of the reader to use for the mosaic
-            reader = imageMosaicFormat.getReader(DataUtilities.fileToURL(Resources.find(mosaic)));
+            reader = imageMosaicFormat.getReader(URLs.fileToUrl(Resources.find(mosaic)));
 
             // configure the coverage
             configureCoverageInfo(builder, store, reader);

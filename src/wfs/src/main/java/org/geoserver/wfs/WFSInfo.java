@@ -56,12 +56,7 @@ public interface WFSInfo extends ServiceInfo {
             return V_20;
         }
 
-        /**
-         * Compares this value with a given version as string
-         *
-         * @param version
-         * @return
-         */
+        /** Compares this value with a given version as string */
         public int compareTo(String version) {
             if (version == null) {
                 return (this == latest()) ? 0 : -1;
@@ -265,4 +260,9 @@ public interface WFSInfo extends ServiceInfo {
 
     /** The srs's that the WFS service will advertise in the capabilities document */
     List<String> getSRS();
+
+    /** Flag that determines if global stored queries are allowed. Default true. */
+    Boolean getAllowGlobalQueries();
+
+    void setAllowGlobalQueries(Boolean allowGlobalQueries);
 }

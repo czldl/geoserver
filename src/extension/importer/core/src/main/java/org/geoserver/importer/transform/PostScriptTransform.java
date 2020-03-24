@@ -34,11 +34,7 @@ public class PostScriptTransform extends AbstractCommandLineTransform implements
         getExecutable();
     }
 
-    /**
-     * Name of the script to be run
-     *
-     * @return
-     */
+    /** Name of the script to be run */
     public String getName() {
         return name;
     }
@@ -48,7 +44,7 @@ public class PostScriptTransform extends AbstractCommandLineTransform implements
         File executable = getExecutable();
 
         CommandLine cmd = new CommandLine(executable);
-        for (String option : options) {
+        for (String option : getOptions()) {
             cmd.addArgument(option, false);
         }
 

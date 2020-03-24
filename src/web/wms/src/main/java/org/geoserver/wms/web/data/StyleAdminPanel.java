@@ -386,7 +386,7 @@ public class StyleAdminPanel extends StyleEditTabPanel {
                     try {
                         styleResource = dd.style(si);
                         try (OutputStream os = styleResource.out()) {
-                            IOUtils.write(stylePage.editor.getInput(), os);
+                            IOUtils.write(stylePage.editor.getInput(), os, "UTF-8");
                         }
                         // guess the version, the style in the editor might be using one that's
                         // different from the
@@ -492,7 +492,9 @@ public class StyleAdminPanel extends StyleEditTabPanel {
                         // same here, force validation or the field won't be updated
                         stylePage.editor.reset();
                         stylePage.setRawStyle(stylePage.readFile(style));
-                        stylePage.getStyleInfo().setFormat(style.getFormat());
+                        if (formatChoice.isEnabled()) {
+                            formatChoice.setModelObject(style.getFormat());
+                        }
                         target.appendJavaScript(
                                 String.format(
                                         "if (document.gsEditors) { document.gsEditors.editor.setOption('mode', '%s'); }",

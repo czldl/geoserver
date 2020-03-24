@@ -19,13 +19,13 @@ import org.geoserver.catalog.Catalog;
 import org.geoserver.cluster.ClusterConfig;
 import org.geoserver.cluster.ClusterConfigWatcher;
 import org.geoserver.config.GeoServerPluginConfigurator;
-import org.geoserver.data.util.IOUtils;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.platform.resource.Files;
 import org.geoserver.platform.resource.Paths;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.ResourceStore;
 import org.geoserver.platform.resource.Resources;
+import org.geoserver.util.IOUtils;
 import org.geotools.util.logging.Logging;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
@@ -56,7 +56,6 @@ public class HzCluster implements GeoServerPluginConfigurator, DisposableBean, I
      *
      * @param fileName Name of the file
      * @param scope Scope for looking up a default if the file doesn't exist.
-     * @throws IOException
      */
     public Resource getConfigFile(String fileName, Class<?> scope) throws IOException {
         return getConfigFile(fileName, scope, this.rl);
@@ -147,12 +146,7 @@ public class HzCluster implements GeoServerPluginConfigurator, DisposableBean, I
         }
     }
 
-    /**
-     * For Spring initialisation, don't call otherwise.
-     *
-     * @param dd
-     * @throws IOException
-     */
+    /** For Spring initialisation, don't call otherwise. */
     public void setResourceStore(ResourceStore dd) throws IOException {
         rl = dd;
     }

@@ -9,6 +9,7 @@ import static org.easymock.EasyMock.*;
 
 import java.util.*;
 import org.easymock.Capture;
+import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.geoserver.catalog.*;
@@ -54,6 +55,8 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
     protected WorkspaceInfo nurcWs;
 
     protected LayerInfo statesLayer;
+
+    protected LayerInfo regionsLayer;
 
     protected LayerInfo landmarksLayer;
 
@@ -114,6 +117,10 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
     protected List<WMTSLayerInfo> wmtsLayers;
 
     protected LayerGroupInfo namedTreeA;
+
+    protected LayerGroupInfo namedTreeB;
+
+    protected LayerGroupInfo namedTreeC;
 
     protected LayerGroupInfo containerTreeB;
 
@@ -179,6 +186,7 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
         landmarksLayer = buildLayer("landmarks", toppWs, FeatureTypeInfo.class);
         basesLayer = buildLayer("bases", toppWs, FeatureTypeInfo.class);
         forestsLayer = buildLayer("forests", toppWs, FeatureTypeInfo.class);
+        regionsLayer = buildLayer("regions", toppWs, FeatureTypeInfo.class);
         // let's add one with a dot inside the name
         arcGridLayer = buildLayer("arc.grid", nurcWs, CoverageInfo.class);
 
@@ -212,6 +220,9 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
         namedTreeA =
                 buildLayerGroup(
                         "namedTreeA", Mode.NAMED, null, statesLayer, roadsLayer, citiesLayer);
+        namedTreeB = buildLayerGroup("namedTreeB", Mode.NAMED, null, true, false, regionsLayer);
+        namedTreeC = buildLayerGroup("namedTreeC", Mode.NAMED, null, false, true, regionsLayer);
+
         nestedContainerE = buildLayerGroup("nestedContainerE", Mode.CONTAINER, null, forestsLayer);
         containerTreeB =
                 buildLayerGroup(
@@ -230,6 +241,8 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
                         layerGroupTopp,
                         layerGroupWithSomeLockedLayer,
                         namedTreeA,
+                        namedTreeB,
+                        namedTreeC,
                         containerTreeB,
                         singleGroupC,
                         wsContainerD,
@@ -297,7 +310,6 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
         ResourceInfo resource = createNiceMock(resourceClass);
         expect(resource.getStore()).andReturn(store).anyTimes();
         expect(resource.getName()).andReturn(name).anyTimes();
-        expect(resource.getPrefixedName()).andReturn(ws.getName() + ":" + name).anyTimes();
         expect(resource.prefixedName()).andReturn(ws.getName() + ":" + name).anyTimes();
         expect(resource.getNamespace()).andReturn(ns).anyTimes();
         if (resource instanceof FeatureTypeInfo) {
@@ -314,7 +326,6 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
 
         LayerInfo layer = createNiceMock(LayerInfo.class);
         expect(layer.getName()).andReturn(name).anyTimes();
-        expect(layer.getPrefixedName()).andReturn(ws.getName() + ":" + name).anyTimes();
         expect(layer.prefixedName()).andReturn(ws.getName() + ":" + name).anyTimes();
         expect(layer.getResource()).andReturn(resource).anyTimes();
         expect(layer.getId()).andReturn(name + "-lid").anyTimes();
@@ -340,6 +351,25 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
 
     protected LayerGroupInfo buildLayerGroup(
             String name, Mode type, WorkspaceInfo ws, PublishedInfo... contents) {
+        return buildLayerGroup(name, type, ws, true, true, contents);
+    }
+
+    protected LayerGroupInfo buildLayerGroup(
+            String name,
+            Mode type,
+            WorkspaceInfo ws,
+            boolean advertised,
+            PublishedInfo... contents) {
+        return buildLayerGroup(name, type, ws, advertised, true, contents);
+    }
+
+    protected LayerGroupInfo buildLayerGroup(
+            String name,
+            Mode type,
+            WorkspaceInfo ws,
+            boolean advertised,
+            boolean enabled,
+            PublishedInfo... contents) {
         LayerGroupInfo layerGroup = createNiceMock(LayerGroupInfo.class);
         expect(layerGroup.getName()).andReturn(name).anyTimes();
         expect(layerGroup.prefixedName())
@@ -357,6 +387,7 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
         expect(layerGroup.getId())
                 .andAnswer(() -> (ws == null ? name : ws.getName() + ":" + name) + "-id")
                 .anyTimes();
+        expect(layerGroup.isAdvertised()).andReturn(advertised).anyTimes();
         replay(layerGroup);
         return layerGroup;
     }
@@ -564,7 +595,7 @@ public abstract class AbstractAuthorizationTest extends SecureObjectsTest {
     }
 
     <T extends CatalogInfo> void stubList(Catalog mock, Class<T> clazz, final List<T> source) {
-        final Capture<Filter> cap = new Capture<Filter>();
+        final Capture<Filter> cap = Capture.newInstance(CaptureType.LAST);
         expect(catalog.list(eq(clazz), capture(cap)))
                 .andStubAnswer(
                         new IAnswer<CloseableIterator<T>>() {

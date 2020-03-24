@@ -5,6 +5,7 @@
  */
 package org.geoserver.security.decorators;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import org.geoserver.catalog.AttributionInfo;
@@ -17,7 +18,7 @@ import org.geoserver.catalog.MetadataMap;
 import org.geoserver.catalog.PublishedType;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.StyleInfo;
-import org.geoserver.catalog.impl.AbstractDecorator;
+import org.geotools.util.decorate.AbstractDecorator;
 
 /**
  * Delegates every method to the wrapped {@link LayerInfo}. Subclasses will override selected
@@ -185,11 +186,6 @@ public class DecoratingLayerInfo extends AbstractDecorator<LayerInfo> implements
     }
 
     @Override
-    public String getPrefixedName() {
-        return delegate.getPrefixedName();
-    }
-
-    @Override
     public WMSInterpolation getDefaultWMSInterpolationMethod() {
         return delegate.getDefaultWMSInterpolationMethod();
     }
@@ -197,5 +193,25 @@ public class DecoratingLayerInfo extends AbstractDecorator<LayerInfo> implements
     @Override
     public void setDefaultWMSInterpolationMethod(WMSInterpolation interpolationMethod) {
         delegate.setDefaultWMSInterpolationMethod(interpolationMethod);
+    }
+
+    @Override
+    public Date getDateModified() {
+        return delegate.getDateModified();
+    }
+
+    @Override
+    public Date getDateCreated() {
+        return delegate.getDateCreated();
+    }
+
+    @Override
+    public void setDateCreated(Date dateCreated) {
+        delegate.setDateCreated(dateCreated);
+    }
+
+    @Override
+    public void setDateModified(Date dateModified) {
+        delegate.setDateModified(dateModified);
     }
 }

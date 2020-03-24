@@ -16,7 +16,6 @@ import org.geotools.data.simple.SimpleFeatureStore;
 import org.geotools.feature.FeatureCollection;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
-import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.feature.type.Name;
 import org.opengis.filter.Filter;
 import org.opengis.filter.identity.FeatureId;
@@ -50,12 +49,7 @@ public class GeoServerFeatureStore extends GeoServerFeatureSource implements Sim
         return (SimpleFeatureStore) source;
     }
 
-    /**
-     * see interface for details.
-     *
-     * @param fc
-     * @throws IOException
-     */
+    /** see interface for details. */
     public List<FeatureId> addFeatures(FeatureCollection<SimpleFeatureType, SimpleFeature> fc)
             throws IOException {
         FeatureStore<SimpleFeatureType, SimpleFeature> store = store();
@@ -73,25 +67,6 @@ public class GeoServerFeatureStore extends GeoServerFeatureSource implements Sim
         filter = makeDefinitionFilter(filter);
 
         store().removeFeatures(filter);
-    }
-
-    /**
-     * @task REVISIT: should we check that non exposed attributes are requiered in <code>type</code>
-     *     ?
-     */
-    public void modifyFeatures(AttributeDescriptor[] type, Object[] value, Filter filter)
-            throws IOException {
-        filter = makeDefinitionFilter(filter);
-
-        store().modifyFeatures(type, value, filter);
-    }
-
-    /** */
-    public void modifyFeatures(AttributeDescriptor type, Object value, Filter filter)
-            throws IOException {
-        filter = makeDefinitionFilter(filter);
-
-        store().modifyFeatures(type, value, filter);
     }
 
     /** */

@@ -13,6 +13,7 @@ import javax.media.jai.PlanarImage;
 import javax.media.jai.RenderedImageList;
 import org.geoserver.ows.AbstractDispatcherCallback;
 import org.geoserver.ows.Request;
+import org.geoserver.wms.map.RenderedImageTimeDecorator;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.image.util.ImageUtilities;
 
@@ -22,11 +23,7 @@ public class RasterCleaner extends AbstractDispatcherCallback {
     static final ThreadLocal<List<GridCoverage2D>> coverages =
             new ThreadLocal<List<GridCoverage2D>>();
 
-    /**
-     * Schedules a RenderedImage for cleanup at the end of the request
-     *
-     * @param schema
-     */
+    /** Schedules a RenderedImage for cleanup at the end of the request */
     public static void addImage(RenderedImage image) {
         if (image == null) {
             return;
@@ -40,11 +37,7 @@ public class RasterCleaner extends AbstractDispatcherCallback {
         list.add(image);
     }
 
-    /**
-     * Schedules a RenderedImage for cleanup at the end of the request
-     *
-     * @param schema
-     */
+    /** Schedules a RenderedImage for cleanup at the end of the request */
     public static void addCoverage(GridCoverage2D coverage) {
         if (coverage == null) {
             return;
@@ -69,6 +62,9 @@ public class RasterCleaner extends AbstractDispatcherCallback {
         if (list != null) {
             images.remove();
             for (RenderedImage image : list) {
+                if (image instanceof RenderedImageTimeDecorator)
+                    image = ((RenderedImageTimeDecorator) image).getDelegate();
+
                 if (image instanceof RenderedImageList) {
                     RenderedImageList ril = (RenderedImageList) image;
                     for (int i = 0; i < ril.size(); i++) {

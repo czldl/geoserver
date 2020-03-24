@@ -262,7 +262,7 @@ public class DbMappings {
                 Closeables.close(in, true);
             }
         } catch (IOException e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e.getCause());
         }
         return properties;
     }
@@ -340,7 +340,8 @@ public class DbMappings {
                 try {
                     clazz = Class.forName(typeName);
                 } catch (ClassNotFoundException e) {
-                    throw Throwables.propagate(e);
+                    Throwables.throwIfUnchecked(e);
+                    throw new RuntimeException(e);
                 }
                 types.put(oid.intValue(), clazz);
             } while (rowSet.next());
@@ -401,10 +402,7 @@ public class DbMappings {
         log("----------------------");
     }
 
-    /**
-     * @param clazz
-     * @param nestedPropDefs
-     */
+    /** */
     private void addNestedPropertyTypes(
             final NamedParameterJdbcOperations template,
             Collection<PropertyTypeDef> nestedPropDefs) {
@@ -466,11 +464,6 @@ public class DbMappings {
     }
 
     /**
-     * @param infoClazz
-     * @param template
-     * @param propertyName
-     * @param targetProperty
-     * @param isCollection
      * @return the newly added property type, or {@code null} if it was not added to the database
      *     (i.e. already exists)
      */

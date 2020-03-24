@@ -11,9 +11,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.GZIPOutputStream;
-import org.apache.commons.io.IOUtils;
 import org.geoserver.config.GeoServer;
 import org.geoserver.platform.ServiceException;
+import org.geoserver.util.IOUtils;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.gce.arcgrid.ArcGridWriter;
 
@@ -82,6 +82,7 @@ public class AscCoverageResponseDelegate extends BaseCoverageResponseDelegate
                             .toString());
         }
 
+        @SuppressWarnings("PMD.CloseResource") // just a wrapper, output closing managed outside
         GZIPOutputStream gzipOut = null;
         if (isOutputCompressed(outputFormat)) {
             gzipOut = new GZIPOutputStream(output);

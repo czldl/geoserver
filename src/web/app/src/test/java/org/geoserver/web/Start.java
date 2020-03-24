@@ -23,9 +23,7 @@ import java.util.Enumeration;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.security.auth.x500.X500Principal;
-import org.bouncycastle.jce.X509Principal;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.x509.X509V3CertificateGenerator;
 import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -46,6 +44,9 @@ import org.springframework.security.web.authentication.preauth.x509.SubjectDnX50
  *
  * @author wolf
  */
+@SuppressWarnings(
+        "deprecation") // deep BouncyCastle API changes, need someone that understands it to replace
+// current code
 public class Start {
     private static final Logger log =
             org.geotools.util.logging.Logging.getLogger(Start.class.getName());
@@ -111,7 +112,9 @@ public class Start {
             jettyServer.setHandler(wah);
             wah.setTempDirectory(new File("target/work"));
             // this allows to send large SLD's from the styles form
-            wah.getServletContext().getContextHandler().setMaxFormContentSize(1024 * 1024 * 2);
+            wah.getServletContext().getContextHandler().setMaxFormContentSize(1024 * 1024 * 5);
+            // this allows to configure hyperspectral images
+            wah.getServletContext().getContextHandler().setMaxFormKeys(2000);
 
             String jettyConfigFile = System.getProperty("jetty.config.file");
             if (jettyConfigFile != null) {
@@ -229,19 +232,22 @@ public class Start {
         KeyPair KPair = keyPairGenerator.generateKeyPair();
 
         // cerate a X509 certifacte generator
-        X509V3CertificateGenerator v3CertGen = new X509V3CertificateGenerator();
+        org.bouncycastle.x509.X509V3CertificateGenerator v3CertGen =
+                new org.bouncycastle.x509.X509V3CertificateGenerator();
 
         // set validity to 10 years, issuer and subject are equal --> self singed certificate
         int random = new SecureRandom().nextInt();
         if (random < 0) random *= -1;
         v3CertGen.setSerialNumber(BigInteger.valueOf(random));
         v3CertGen.setIssuerDN(
-                new X509Principal("CN=" + hostname + ", OU=None, O=None L=None, C=None"));
+                new org.bouncycastle.jce.X509Principal(
+                        "CN=" + hostname + ", OU=None, O=None L=None, C=None"));
         v3CertGen.setNotBefore(new Date(System.currentTimeMillis() - 1000L * 60 * 60 * 24 * 30));
         v3CertGen.setNotAfter(
                 new Date(System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 365 * 10)));
         v3CertGen.setSubjectDN(
-                new X509Principal("CN=" + hostname + ", OU=None, O=None L=None, C=None"));
+                new org.bouncycastle.jce.X509Principal(
+                        "CN=" + hostname + ", OU=None, O=None L=None, C=None"));
 
         v3CertGen.setPublicKey(KPair.getPublic());
         v3CertGen.setSignatureAlgorithm("MD5WithRSAEncryption");

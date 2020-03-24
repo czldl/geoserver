@@ -6,6 +6,7 @@
 package org.geoserver.rest.catalog;
 
 import static org.custommonkey.xmlunit.XMLAssert.*;
+import static org.geoserver.data.test.MockData.SF_PREFIX;
 import static org.geoserver.rest.RestBaseController.ROOT_PATH;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -17,9 +18,12 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import javax.xml.namespace.QName;
 import net.sf.json.JSON;
 import net.sf.json.JSONObject;
 import org.geoserver.catalog.AttributeTypeInfo;
@@ -27,6 +31,7 @@ import org.geoserver.catalog.DataStoreInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.ResourceInfo;
+import org.geoserver.data.test.CiteTestData;
 import org.geoserver.data.test.SystemTestData;
 import org.geoserver.rest.RestBaseController;
 import org.geotools.data.DataAccess;
@@ -37,6 +42,7 @@ import org.junit.Test;
 import org.locationtech.jts.geom.MultiPolygon;
 import org.opengis.feature.type.FeatureType;
 import org.opengis.feature.type.Name;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.w3c.dom.Document;
 
@@ -63,7 +69,35 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
                 dom.getElementsByTagName("featureType").getLength());
     }
 
+    @Test // GEOS-9190
+    public void testCreateFeatureTypeSameStoreNameDifferentWorkspace() throws Exception {
+        final boolean configureFeatureType = false;
+        final String ws1 = "gs";
+        final String ws2 = "sf";
+        // create two stores named "pds" on different workspaces
+        addPropertyDataStore(ws1, configureFeatureType);
+        addPropertyDataStore(ws2, configureFeatureType);
+
+        String xml = "<featureType><name>pdsa</name><store>pds</store></featureType>";
+
+        MockHttpServletResponse response;
+        String ws1FetureTypesPath =
+                BASEPATH + "/workspaces/" + ws1 + "/datastores/pds/featuretypes";
+        String ws2FeatureTypesPath =
+                BASEPATH + "/workspaces/" + ws2 + "/datastores/pds/featuretypes";
+
+        response = postAsServletResponse(ws1FetureTypesPath, xml, "text/xml");
+        assertEquals(201, response.getStatus());
+
+        response = postAsServletResponse(ws2FeatureTypesPath, xml, "text/xml");
+        assertEquals(201, response.getStatus());
+    }
+
     void addPropertyDataStore(boolean configureFeatureType) throws Exception {
+        addPropertyDataStore("gs", configureFeatureType);
+    }
+
+    void addPropertyDataStore(String workspace, boolean configureFeatureType) throws Exception {
         ByteArrayOutputStream zbytes = new ByteArrayOutputStream();
         ZipOutputStream zout = new ZipOutputStream(zbytes);
 
@@ -89,10 +123,16 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
         zout.close();
 
         String q = "configure=" + (configureFeatureType ? "all" : "none");
-        put(
-                BASEPATH + "/workspaces/gs/datastores/pds/file.properties?" + q,
-                zbytes.toByteArray(),
-                "application/zip");
+        MockHttpServletResponse response =
+                putAsServletResponse(
+                        BASEPATH
+                                + "/workspaces/"
+                                + workspace
+                                + "/datastores/pds/file.properties?"
+                                + q,
+                        zbytes.toByteArray(),
+                        "application/zip");
+        assertEquals(201, response.getStatus());
     }
 
     void addGeomlessPropertyDataStore(boolean configureFeatureType) throws Exception {
@@ -127,12 +167,7 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
                 "application/zip");
     }
 
-    /**
-     * Add a property data store with multiple feature types, but only configure the first.
-     *
-     * @param configureFeatureType
-     * @throws Exception
-     */
+    /** Add a property data store with multiple feature types, but only configure the first. */
     void addPropertyDataStoreOnlyConfigureFirst() throws Exception {
         ByteArrayOutputStream zbytes = new ByteArrayOutputStream();
         ZipOutputStream zout = new ZipOutputStream(zbytes);
@@ -298,7 +333,7 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
 
         String dom = getAsString(BASEPATH + "/workspaces/gs/datastores/pds/featuretypes.xml");
 
-        System.out.println(dom);
+        // System.out.println(dom);
     }
 
     @Test
@@ -604,6 +639,7 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
                 postAsServletResponse(
                         BASEPATH + "/workspaces/gs/datastores/ngpds/featuretypes", xml, "text/xml");
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
         assertNotNull(response.getHeader("Location"));
         assertTrue(
                 response.getHeader("Location")
@@ -658,6 +694,7 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
                         xml,
                         "text/xml");
         assertEquals(201, response.getStatus());
+        assertEquals(MediaType.TEXT_PLAIN_VALUE, response.getContentType());
         assertNotNull(response.getHeader("Location"));
         assertTrue(
                 response.getHeader("Location")
@@ -708,7 +745,7 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
                 getAsString(
                         BASEPATH
                                 + "/workspaces/sf/datastores/sf/featuretypes/PrimitiveGeoFeature.json");
-        System.out.println(json);
+        // System.out.println(json);
         MockHttpServletResponse response =
                 putAsServletResponse(
                         BASEPATH + "/workspaces/sf/datastores/sf/featuretypes/PrimitiveGeoFeature",
@@ -719,6 +756,24 @@ public class FeatureTypeControllerTest extends CatalogRESTTestSupport {
         // Fetch the feature from the catalog again, and ensure nothing changed.
         FeatureTypeInfo after = catalog.getFeatureTypeByName("sf", "PrimitiveGeoFeature");
         assertEquals(before, after);
+    }
+
+    @Test
+    public void testGetWithMultipleStore() throws Exception {
+        QName geometryless = CiteTestData.GEOMETRYLESS;
+        QName qName =
+                new QName(geometryless.getNamespaceURI(), geometryless.getLocalPart(), SF_PREFIX);
+        Map<SystemTestData.LayerProperty, Object> props = new HashMap<>();
+        props.put(SystemTestData.LayerProperty.STORE, "tempStore");
+        getTestData().addVectorLayer(qName, props, catalog);
+
+        MockHttpServletResponse layerStore1 =
+                getAsServletResponse(ROOT_PATH + "/workspaces/sf/featuretypes/GenericEntity.json");
+        MockHttpServletResponse layerStore2 =
+                getAsServletResponse(ROOT_PATH + "/workspaces/sf/featuretypes/Geometryless.json");
+
+        assertEquals(layerStore1.getStatus(), 200);
+        assertEquals(layerStore2.getStatus(), 200);
     }
 
     public static void assertContains(String message, String contains) {

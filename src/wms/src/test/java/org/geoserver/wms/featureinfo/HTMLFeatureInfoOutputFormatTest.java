@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 import net.opengis.wfs.FeatureCollectionType;
 import net.opengis.wfs.WfsFactory;
 import org.geoserver.catalog.FeatureTypeInfo;
+import org.geoserver.catalog.Keyword;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.NamespaceInfo;
 import org.geoserver.catalog.PublishedType;
@@ -40,15 +41,21 @@ import org.geoserver.catalog.impl.NamespaceInfoImpl;
 import org.geoserver.data.test.MockData;
 import org.geoserver.ows.Dispatcher;
 import org.geoserver.ows.Request;
+import org.geoserver.platform.GeoServerExtensions;
+import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.template.GeoServerTemplateLoader;
 import org.geoserver.wms.GetFeatureInfoRequest;
 import org.geoserver.wms.MapLayerInfo;
 import org.geoserver.wms.WMSTestSupport;
+import org.geotools.data.DataUtilities;
+import org.geotools.feature.simple.SimpleFeatureBuilder;
+import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
 import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opengis.feature.simple.SimpleFeatureType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockServletContext;
 
@@ -69,7 +76,9 @@ public class HTMLFeatureInfoOutputFormatTest extends WMSTestSupport {
 
     @Before
     public void setUp() throws URISyntaxException, IOException {
-        outputFormat = new HTMLFeatureInfoOutputFormat(getWMS());
+        outputFormat =
+                new HTMLFeatureInfoOutputFormat(
+                        getWMS(), GeoServerExtensions.bean(GeoServerResourceLoader.class));
 
         currentTemplate = "test_content.ftl";
         // configure template loader
@@ -101,6 +110,8 @@ public class HTMLFeatureInfoOutputFormatTest extends WMSTestSupport {
         Request request = new Request();
         parameters = new HashMap<String, Object>();
         parameters.put("LAYER", "testLayer");
+        parameters.put("NUMBER1", 10);
+        parameters.put("NUMBER2", 100);
         Map<String, String> env = new HashMap<String, String>();
         env.put("TEST1", "VALUE1");
         env.put("TEST2", "VALUE2");
@@ -130,12 +141,7 @@ public class HTMLFeatureInfoOutputFormatTest extends WMSTestSupport {
         getFeatureInfoRequest.setQueryLayers(queryLayers);
     }
 
-    /**
-     * Test request values are inserted in processed template
-     *
-     * @throws IOException
-     * @throws URISyntaxException
-     */
+    /** Test request values are inserted in processed template */
     @Test
     public void testRequestParametersAreEvaluatedInTemplate() throws IOException {
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
@@ -161,6 +167,45 @@ public class HTMLFeatureInfoOutputFormatTest extends WMSTestSupport {
         } finally {
             System.clearProperty("TEST_PROPERTY");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCoverageInfoIsEvaluatedInTemplate() throws IOException {
+        currentTemplate = "test_resource_content.ftl";
+        SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
+        builder.setName(toName(MockData.WORLD));
+        SimpleFeatureType type = builder.buildFeatureType();
+        Double[] values = new Double[0];
+        fcType.getFeature()
+                .set(0, DataUtilities.collection(SimpleFeatureBuilder.build(type, values, "")));
+        ResourceInfo resource = getCatalog().getCoverageByName(toName(MockData.WORLD));
+        resource.setTitle("Raster Title");
+        resource.setAbstract("Raster Abstract");
+        resource.getKeywords().set(0, new Keyword("Raster Keyword"));
+        getCatalog().save(resource);
+        ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+        outputFormat.write(fcType, getFeatureInfoRequest, outStream);
+        String result = new String(outStream.toByteArray());
+
+        // Verify that a raster layer's title, abstract, etc. is retrieved properly.
+        assertEquals("Raster Title,Raster Abstract,Raster Keyword,EPSG:4326", result);
+    }
+
+    @Test
+    public void testFeatureTypeInfoIsEvaluatedInTemplate() throws IOException {
+        currentTemplate = "test_resource_content.ftl";
+        ResourceInfo resource = getFeatureTypeInfo(MockData.PRIMITIVEGEOFEATURE);
+        resource.setTitle("Vector Title");
+        resource.setAbstract("Vector Abstract");
+        resource.getKeywords().set(0, new Keyword("Vector Keyword"));
+        getCatalog().save(resource);
+        ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+        outputFormat.write(fcType, getFeatureInfoRequest, outStream);
+        String result = new String(outStream.toByteArray());
+
+        // Verify that a vector layer's title, abstract, etc. is retrieved properly.
+        assertEquals("Vector Title,Vector Abstract,Vector Keyword,EPSG:4326", result);
     }
 
     @Test
@@ -239,7 +284,9 @@ public class HTMLFeatureInfoOutputFormatTest extends WMSTestSupport {
                         new MapLayerInfo(getCatalog().getLayerByName(featureType2.prefixedName())));
         FeatureCollectionType type2 = WfsFactory.eINSTANCE.createFeatureCollectionType();
         type2.getFeature().add(featureType2.getFeatureSource(null, null).getFeatures());
-        final HTMLFeatureInfoOutputFormat format = new HTMLFeatureInfoOutputFormat(getWMS());
+        final HTMLFeatureInfoOutputFormat format =
+                new HTMLFeatureInfoOutputFormat(
+                        getWMS(), GeoServerExtensions.bean(GeoServerResourceLoader.class));
         format.templateLoader =
                 new GeoServerTemplateLoader(getClass(), getDataDirectory()) {
                     @Override
@@ -292,5 +339,14 @@ public class HTMLFeatureInfoOutputFormatTest extends WMSTestSupport {
         } finally {
             executor.shutdown();
         }
+    }
+
+    @Test
+    public void testStaticMathMethodsAreEvaluatedInTemplate() throws IOException {
+        currentTemplate = "test_static_content.ftl";
+        ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+        outputFormat.write(fcType, getFeatureInfoRequest, outStream);
+        String result = new String(outStream.toByteArray());
+        assertEquals(String.valueOf(Math.max(10, 100)), result);
     }
 }
